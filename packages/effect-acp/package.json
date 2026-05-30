@@ -34,7 +34,7 @@
   },
   "scripts": {
     "typecheck": "tsgo --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "generate": "bun run scripts/generate.ts"
   },
   "dependencies": {
