@@ -25,6 +25,8 @@ Preserve these invariants:
 - Read `groundtruth.md` before technical changes. Update it in the same change whenever runtime
   behavior, data contracts, persistence, extraction, provider use, build or release pipelines,
   required environment configuration, validation commands, or known technical risks change.
+- Keep git history maintainable: make small commits for each coherent feature, fix, or behavior
+  change, and push each commit after validation. Avoid bundling unrelated edits into one commit.
 - Run `bun fmt`, `bun lint`, and `bun typecheck` before considering tasks complete.
 - Run `bun run test`, never `bun test`.
 - If changing native mobile code, run `bun lint:mobile`.
