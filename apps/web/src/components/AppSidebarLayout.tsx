@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
-import ThreadSidebar from "./Sidebar";
+import { StudySidebar } from "./study/StudySidebar";
 import { Sidebar, SidebarProvider, SidebarRail } from "./ui/sidebar";
 import {
   clearShortcutModifierState,
@@ -66,7 +66,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
           storageKey: THREAD_SIDEBAR_WIDTH_STORAGE_KEY,
         }}
       >
-        <ThreadSidebar />
+        <StudySidebar />
         <SidebarRail />
       </Sidebar>
       {children}
