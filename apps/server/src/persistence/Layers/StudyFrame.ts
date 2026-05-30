@@ -121,6 +121,7 @@ type StudyQuestionSupportRow = {
   readonly commonMistakes: string;
   readonly supportConfidence: number;
   readonly generatedAt: string;
+  readonly generationMetadataJson: string;
 };
 
 type StudyQuestionTopicRow = {
@@ -165,6 +166,7 @@ type StudyTopicModuleRow = {
   readonly commonTrapsMarkdown: string;
   readonly subtypeCoverageJson: string;
   readonly firstExposureComplete: number;
+  readonly generationMetadataJson: string;
 };
 
 type StudyPracticeItemRow = {
@@ -190,6 +192,7 @@ type StudyPracticeSupportRow = {
   readonly stepByStepSolutionMarkdown: string;
   readonly commonMistakesMarkdown: string;
   readonly supportConfidence: number;
+  readonly generationMetadataJson: string;
 };
 
 type StudyAttemptRow = {
@@ -232,6 +235,7 @@ type StudyGeneratedQuestionBatchRow = {
   readonly sourceQuestionIds: string;
   readonly generationReason: StudyGeneratedQuestionBatch["generationReason"];
   readonly createdAt: string;
+  readonly generationMetadataJson: string;
 };
 
 const parseJson = <T>(value: string | null, fallback: T): T => {
@@ -370,7 +374,8 @@ const makeStudyFrameRepository = Effect.gen(function* () {
           solution_steps_json AS "solutionSteps",
           common_mistakes_json AS "commonMistakes",
           support_confidence AS "supportConfidence",
-          generated_at AS "generatedAt"
+          generated_at AS "generatedAt",
+          generation_metadata_json AS "generationMetadataJson"
         FROM question_support
         ORDER BY question_id ASC, id ASC
       `;
@@ -422,7 +427,8 @@ const makeStudyFrameRepository = Effect.gen(function* () {
           formula_sheet_markdown AS "formulaSheetMarkdown",
           common_traps_markdown AS "commonTrapsMarkdown",
           subtype_coverage_json AS "subtypeCoverageJson",
-          first_exposure_complete AS "firstExposureComplete"
+          first_exposure_complete AS "firstExposureComplete",
+          generation_metadata_json AS "generationMetadataJson"
         FROM study_topic_modules
         ORDER BY id ASC
       `;
@@ -451,7 +457,8 @@ const makeStudyFrameRepository = Effect.gen(function* () {
           hints_json AS "hintsJson",
           step_by_step_solution_markdown AS "stepByStepSolutionMarkdown",
           common_mistakes_markdown AS "commonMistakesMarkdown",
-          support_confidence AS "supportConfidence"
+          support_confidence AS "supportConfidence",
+          generation_metadata_json AS "generationMetadataJson"
         FROM study_practice_support
         ORDER BY practice_item_id ASC, id ASC
       `;
@@ -499,7 +506,8 @@ const makeStudyFrameRepository = Effect.gen(function* () {
           topic_thread_id AS "topicThreadId",
           source_question_ids_json AS "sourceQuestionIds",
           generation_reason AS "generationReason",
-          created_at AS "createdAt"
+          created_at AS "createdAt",
+          generation_metadata_json AS "generationMetadataJson"
         FROM generated_question_batches
         ORDER BY created_at ASC
       `;
@@ -586,6 +594,7 @@ const makeStudyFrameRepository = Effect.gen(function* () {
               commonMistakes: parseJson(row.commonMistakes, [] as string[]),
               supportConfidence: row.supportConfidence,
               generatedAt: row.generatedAt,
+              generationMetadataJson: parseJson(row.generationMetadataJson, null),
             }),
           ),
           questionTopics: topicRows.map(
@@ -648,6 +657,7 @@ const makeStudyFrameRepository = Effect.gen(function* () {
               commonTrapsMarkdown: row.commonTrapsMarkdown,
               subtypeCoverageJson: parseJson(row.subtypeCoverageJson, null as unknown),
               firstExposureComplete: toBoolean(row.firstExposureComplete),
+              generationMetadataJson: parseJson(row.generationMetadataJson, null),
             }),
           ),
           practiceItems: practiceItemRows.map(
@@ -675,6 +685,7 @@ const makeStudyFrameRepository = Effect.gen(function* () {
               stepByStepSolutionMarkdown: row.stepByStepSolutionMarkdown,
               commonMistakesMarkdown: row.commonMistakesMarkdown,
               supportConfidence: row.supportConfidence,
+              generationMetadataJson: parseJson(row.generationMetadataJson, null),
             }),
           ),
         },
@@ -731,6 +742,7 @@ const makeStudyFrameRepository = Effect.gen(function* () {
             sourceQuestionIds: parseJson(row.sourceQuestionIds, [] as string[]),
             generationReason: row.generationReason,
             createdAt: row.createdAt,
+            generationMetadataJson: parseJson(row.generationMetadataJson, null),
           }),
         ),
       };
@@ -967,7 +979,8 @@ const makeStudyFrameRepository = Effect.gen(function* () {
                 solution_steps_json,
                 common_mistakes_json,
                 support_confidence,
-                generated_at
+                generated_at,
+                generation_metadata_json
               )
               VALUES (
                 ${support.id},
@@ -979,7 +992,8 @@ const makeStudyFrameRepository = Effect.gen(function* () {
                 ${toJson(support.solutionSteps)},
                 ${toJson(support.commonMistakes)},
                 ${support.supportConfidence},
-                ${support.generatedAt}
+                ${support.generatedAt},
+                ${toJson(support.generationMetadataJson ?? null)}
               )
             `;
           }
@@ -1069,7 +1083,8 @@ const makeStudyFrameRepository = Effect.gen(function* () {
                 formula_sheet_markdown,
                 common_traps_markdown,
                 subtype_coverage_json,
-                first_exposure_complete
+                first_exposure_complete,
+                generation_metadata_json
               )
               VALUES (
                 ${module.id},
@@ -1079,7 +1094,8 @@ const makeStudyFrameRepository = Effect.gen(function* () {
                 ${module.formulaSheetMarkdown},
                 ${module.commonTrapsMarkdown},
                 ${toJson(module.subtypeCoverageJson)},
-                ${fromBoolean(module.firstExposureComplete)}
+                ${fromBoolean(module.firstExposureComplete)},
+                ${toJson(module.generationMetadataJson ?? null)}
               )
             `;
           }
@@ -1125,7 +1141,8 @@ const makeStudyFrameRepository = Effect.gen(function* () {
                 hints_json,
                 step_by_step_solution_markdown,
                 common_mistakes_markdown,
-                support_confidence
+                support_confidence,
+                generation_metadata_json
               )
               VALUES (
                 ${support.id},
@@ -1135,7 +1152,8 @@ const makeStudyFrameRepository = Effect.gen(function* () {
                 ${toJson(support.hintsJson)},
                 ${support.stepByStepSolutionMarkdown},
                 ${support.commonMistakesMarkdown},
-                ${support.supportConfidence}
+                ${support.supportConfidence},
+                ${toJson(support.generationMetadataJson ?? null)}
               )
             `;
           }
@@ -1220,7 +1238,8 @@ const makeStudyFrameRepository = Effect.gen(function* () {
                 topic_thread_id,
                 source_question_ids_json,
                 generation_reason,
-                created_at
+                created_at,
+                generation_metadata_json
               )
               VALUES (
                 ${batch.id},
@@ -1228,7 +1247,8 @@ const makeStudyFrameRepository = Effect.gen(function* () {
                 ${batch.topicThreadId},
                 ${toJson(batch.sourceQuestionIds)},
                 ${batch.generationReason},
-                ${batch.createdAt}
+                ${batch.createdAt},
+                ${toJson(batch.generationMetadataJson ?? null)}
               )
             `;
           }

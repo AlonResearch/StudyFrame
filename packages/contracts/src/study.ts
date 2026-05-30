@@ -1,5 +1,7 @@
 import * as Schema from "effect/Schema";
 
+import { StudyLlmGenerationMetadata } from "./studyLlm.ts";
+
 const IsoString = Schema.String;
 
 export const StudyQuestionStatus = Schema.Literals([
@@ -163,6 +165,7 @@ export const StudyQuestionSupport = Schema.Struct({
   commonMistakes: Schema.Array(Schema.String),
   supportConfidence: Schema.Number,
   generatedAt: IsoString,
+  generationMetadataJson: Schema.optionalKey(Schema.NullOr(StudyLlmGenerationMetadata)),
 });
 export type StudyQuestionSupport = typeof StudyQuestionSupport.Type;
 
@@ -228,6 +231,7 @@ export const StudyTopicModule = Schema.Struct({
   commonTrapsMarkdown: Schema.String,
   subtypeCoverageJson: Schema.NullOr(Schema.Unknown),
   firstExposureComplete: Schema.Boolean,
+  generationMetadataJson: Schema.optionalKey(Schema.NullOr(StudyLlmGenerationMetadata)),
 });
 export type StudyTopicModule = typeof StudyTopicModule.Type;
 
@@ -270,6 +274,7 @@ export const StudyPracticeSupport = Schema.Struct({
   stepByStepSolutionMarkdown: Schema.String,
   commonMistakesMarkdown: Schema.String,
   supportConfidence: Schema.Number,
+  generationMetadataJson: Schema.optionalKey(Schema.NullOr(StudyLlmGenerationMetadata)),
 });
 export type StudyPracticeSupport = typeof StudyPracticeSupport.Type;
 
@@ -284,6 +289,7 @@ export const StudyFeedbackResult = Schema.Struct({
   missingRubricLabels: Schema.Array(Schema.String),
   feedback: Schema.String,
   nextStep: Schema.String,
+  generationMetadataJson: Schema.optionalKey(Schema.NullOr(StudyLlmGenerationMetadata)),
 });
 export type StudyFeedbackResult = typeof StudyFeedbackResult.Type;
 
@@ -333,6 +339,7 @@ export const StudyGeneratedQuestionBatch = Schema.Struct({
     "exam_simulation",
   ]),
   createdAt: IsoString,
+  generationMetadataJson: Schema.optionalKey(Schema.NullOr(StudyLlmGenerationMetadata)),
 });
 export type StudyGeneratedQuestionBatch = typeof StudyGeneratedQuestionBatch.Type;
 

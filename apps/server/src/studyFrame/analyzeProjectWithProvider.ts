@@ -3,18 +3,23 @@ import {
   type StudyAnalyzeProjectInput,
   type StudyAnalyzeProjectResponse,
   type StudyFrameSnapshot,
+  type StudyLlmGenerationMetadata,
   type StudyPracticeSupport,
   type StudyQuestion,
   type StudyQuestionCandidate,
   type StudyQuestionSupport,
   type StudyTopicModule,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import { analyzeProjectSnapshot } from "./analyzeProject.ts";
-import { resolveOptionalStudyFrameTextGeneration } from "./providerTextGeneration.ts";
+import {
+  makeStudyFrameLlmMetadata,
+  resolveOptionalStudyFrameTextGeneration,
+} from "./providerTextGeneration.ts";
 
 export const STUDYFRAME_ANALYSIS_PROMPT_VERSION = "studyframe-analysis-v1";
 
@@ -60,7 +65,16 @@ export const analyzeProjectWithProvider = Effect.fn("StudyFrame.analyzeProjectWi
         outputSchema: ProviderAnalysisEnhancement,
         modelSelection: provider.value.modelSelection,
       });
-      return applyProviderEnhancement(local, enhancement);
+      const generatedAt = DateTime.formatIso(yield* DateTime.now);
+      return applyProviderEnhancement(
+        local,
+        enhancement,
+        makeStudyFrameLlmMetadata(
+          provider.value.modelSelection,
+          STUDYFRAME_ANALYSIS_PROMPT_VERSION,
+          generatedAt,
+        ),
+      );
     });
 
     return yield* providerAnalysis.pipe(
@@ -118,6 +132,7 @@ function buildProviderAnalysisPrompt(local: StudyAnalyzeProjectResponse): string
 function applyProviderEnhancement(
   local: StudyAnalyzeProjectResponse,
   enhancement: ProviderAnalysisEnhancement,
+  generationMetadataJson: StudyLlmGenerationMetadata,
 ): StudyAnalyzeProjectResponse {
   const dataset = local.snapshot.dataset;
   const knownTopicClusterIds = new Set((dataset.topicClusters ?? []).map((cluster) => cluster.id));
@@ -133,10 +148,14 @@ function applyProviderEnhancement(
       .map((support) => [support.questionId, support]),
   );
   const topicModules = (dataset.topicModules ?? []).map((module) =>
-    mergeTopicModule(module, moduleByClusterId.get(module.topicClusterId)),
+    mergeTopicModule(module, moduleByClusterId.get(module.topicClusterId), generationMetadataJson),
   );
   const questionSupport = dataset.questionSupport.map((support) =>
-    mergeQuestionSupport(support, supportByQuestionId.get(support.questionId)),
+    mergeQuestionSupport(
+      support,
+      supportByQuestionId.get(support.questionId),
+      generationMetadataJson,
+    ),
   );
 
   return {
@@ -165,6 +184,7 @@ function applyProviderEnhancement(
 function mergeTopicModule(
   local: StudyTopicModule,
   enhancement: ProviderAnalysisEnhancement["topicModules"][number] | undefined,
+  generationMetadataJson: StudyLlmGenerationMetadata,
 ): StudyTopicModule {
   if (!enhancement) return local;
   return {
@@ -175,12 +195,14 @@ function mergeTopicModule(
     ),
     formulaSheetMarkdown: preferText(enhancement.formulaSheetMarkdown, local.formulaSheetMarkdown),
     commonTrapsMarkdown: preferText(enhancement.commonTrapsMarkdown, local.commonTrapsMarkdown),
+    generationMetadataJson,
   };
 }
 
 function mergeQuestionSupport(
   local: StudyQuestionSupport,
   enhancement: ProviderAnalysisEnhancement["questionSupport"][number] | undefined,
+  generationMetadataJson: StudyLlmGenerationMetadata,
 ): StudyQuestionSupport {
   if (!enhancement) return local;
   return {
@@ -192,6 +214,7 @@ function mergeQuestionSupport(
     solutionSteps: preferStrings(enhancement.solutionSteps, local.solutionSteps),
     commonMistakes: preferStrings(enhancement.commonMistakes, local.commonMistakes),
     supportConfidence: clampConfidence(enhancement.supportConfidence),
+    generationMetadataJson,
   };
 }
 
@@ -228,6 +251,7 @@ function mergePracticeSupport(
         .join("\n"),
       commonMistakesMarkdown: enhanced.commonMistakes.map((mistake) => `- ${mistake}`).join("\n"),
       supportConfidence: enhanced.supportConfidence,
+      generationMetadataJson: enhanced.generationMetadataJson ?? null,
     };
   });
 }

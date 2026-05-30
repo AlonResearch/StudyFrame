@@ -2,14 +2,19 @@ import {
   type StudyFeedbackInput,
   type StudyFeedbackResult,
   type StudyFrameSnapshot,
+  type StudyLlmGenerationMetadata,
   type StudyQuestionSupport,
 } from "@t3tools/contracts";
 import * as Data from "effect/Data";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import { resolveOptionalStudyFrameTextGeneration } from "./providerTextGeneration.ts";
+import {
+  makeStudyFrameLlmMetadata,
+  resolveOptionalStudyFrameTextGeneration,
+} from "./providerTextGeneration.ts";
 
 export const STUDYFRAME_FEEDBACK_PROMPT_VERSION = "studyframe-feedback-v1";
 
@@ -44,6 +49,7 @@ export const generateStudyFeedbackWithProvider = Effect.fn(
     null;
   const provider = yield* resolveOptionalStudyFrameTextGeneration;
   if (Option.isNone(provider)) return Option.none<StudyFeedbackResult>();
+  const generatedAt = DateTime.formatIso(yield* DateTime.now);
 
   const generated = yield* provider.value.textGeneration
     .generateStructured({
@@ -56,7 +62,20 @@ export const generateStudyFeedbackWithProvider = Effect.fn(
     })
     .pipe(
       Effect.map((feedback) =>
-        Option.some(toStudyFeedbackResult(input, question.pointValue, support, feedback)),
+        Option.some(
+          toStudyFeedbackResult(
+            input,
+            question.pointValue,
+            support,
+            feedback,
+            makeStudyFrameLlmMetadata(
+              provider.value.modelSelection,
+              STUDYFRAME_FEEDBACK_PROMPT_VERSION,
+              generatedAt,
+              feedback,
+            ),
+          ),
+        ),
       ),
       Effect.catch((cause) =>
         Effect.logWarning("StudyFrame provider feedback failed; keeping local fallback", {
@@ -103,6 +122,7 @@ function toStudyFeedbackResult(
   pointValue: number,
   support: StudyQuestionSupport | null,
   generated: ProviderStudyFeedback,
+  generationMetadataJson: StudyLlmGenerationMetadata,
 ): StudyFeedbackResult {
   const maxScore = support?.rubric.reduce((total, item) => total + item.points, 0) || pointValue;
   if (input.action === "check_direction") {
@@ -117,6 +137,7 @@ function toStudyFeedbackResult(
       missingRubricLabels: [],
       feedback: redactDirectionText(generated.feedback, support),
       nextStep: redactDirectionText(generated.nextStep, support),
+      generationMetadataJson,
     };
   }
 
@@ -133,6 +154,7 @@ function toStudyFeedbackResult(
     missingRubricLabels: knownRubricLabels(generated.missingRubricLabels, support),
     feedback: generated.feedback.trim(),
     nextStep: generated.nextStep.trim(),
+    generationMetadataJson,
   };
 }
 

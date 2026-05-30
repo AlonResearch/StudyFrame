@@ -424,7 +424,8 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
           topicThreadId,
           sourceQuestionIds: sourceQuestions.map((question) => question.id),
         })
-          .then((variants) => {
+          .then((result) => {
+            const variants = result?.variants;
             if (!variants || variants.length === 0) return;
             const variantBySourceQuestionId = new Map(
               variants.map((variant) => [variant.sourceQuestionId, variant]),
@@ -447,6 +448,14 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
                   };
                 }),
               }),
+              generatedQuestionBatches: current.generatedQuestionBatches.map((currentBatch) =>
+                currentBatch.id === batchId
+                  ? {
+                      ...currentBatch,
+                      generationMetadataJson: result.generationMetadataJson,
+                    }
+                  : currentBatch,
+              ),
             }));
           })
           .catch(() => undefined);

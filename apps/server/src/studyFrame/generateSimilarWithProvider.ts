@@ -4,11 +4,15 @@ import {
   type StudyGenerateSimilarInput,
 } from "@t3tools/contracts";
 import * as Data from "effect/Data";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import { resolveOptionalStudyFrameTextGeneration } from "./providerTextGeneration.ts";
+import {
+  makeStudyFrameLlmMetadata,
+  resolveOptionalStudyFrameTextGeneration,
+} from "./providerTextGeneration.ts";
 
 export const STUDYFRAME_GENERATION_PROMPT_VERSION = "studyframe-generation-v1";
 
@@ -52,7 +56,8 @@ export const generateSimilarWithProvider = Effect.fn("StudyFrame.generateSimilar
     }
 
     const provider = yield* resolveOptionalStudyFrameTextGeneration;
-    if (Option.isNone(provider)) return Option.none<readonly StudyGeneratedVariant[]>();
+    if (Option.isNone(provider)) return Option.none();
+    const generatedAt = DateTime.formatIso(yield* DateTime.now);
 
     return yield* provider.value.textGeneration
       .generateStructured({
@@ -80,8 +85,16 @@ export const generateSimilarWithProvider = Effect.fn("StudyFrame.generateSimilar
             return [{ sourceQuestionId: variant.sourceQuestionId, promptMarkdown }];
           });
           return normalized.length > 0
-            ? Option.some<readonly StudyGeneratedVariant[]>(normalized)
-            : Option.none<readonly StudyGeneratedVariant[]>();
+            ? Option.some({
+                variants: normalized,
+                generationMetadataJson: makeStudyFrameLlmMetadata(
+                  provider.value.modelSelection,
+                  STUDYFRAME_GENERATION_PROMPT_VERSION,
+                  generatedAt,
+                  { variants },
+                ),
+              })
+            : Option.none();
         }),
         Effect.catch((cause) =>
           Effect.logWarning(
@@ -90,7 +103,7 @@ export const generateSimilarWithProvider = Effect.fn("StudyFrame.generateSimilar
               cause,
               topicThreadId: input.topicThreadId,
             },
-          ).pipe(Effect.as(Option.none<readonly StudyGeneratedVariant[]>())),
+          ).pipe(Effect.as(Option.none())),
         ),
       );
   },

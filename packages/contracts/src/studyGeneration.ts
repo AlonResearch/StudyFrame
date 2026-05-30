@@ -1,5 +1,7 @@
 import * as Schema from "effect/Schema";
 
+import { StudyLlmGenerationMetadata } from "./studyLlm.ts";
+
 export const StudyGenerateSimilarInput = Schema.Struct({
   topicThreadId: Schema.String,
   sourceQuestionIds: Schema.Array(Schema.String),
@@ -14,5 +16,6 @@ export type StudyGeneratedVariant = typeof StudyGeneratedVariant.Type;
 
 export const StudyGenerateSimilarResponse = Schema.Struct({
   variants: Schema.NullOr(Schema.Array(StudyGeneratedVariant)),
+  generationMetadataJson: Schema.NullOr(StudyLlmGenerationMetadata),
 });
 export type StudyGenerateSimilarResponse = typeof StudyGenerateSimilarResponse.Type;

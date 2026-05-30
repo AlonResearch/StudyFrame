@@ -10,6 +10,15 @@ import { StudyFrameRepositoryLive } from "./StudyFrame.ts";
 
 const layer = it.layer(StudyFrameRepositoryLive.pipe(Layer.provide(SqlitePersistenceMemory)));
 
+const llmMetadata = {
+  providerInstanceId: "codex",
+  model: "gpt-5",
+  promptVersion: "studyframe-test-v1",
+  generatedAt: "2026-05-29T20:00:00.000Z",
+  warnings: [],
+  rawStructuredResult: { ok: true },
+};
+
 const snapshot: StudyFrameSnapshot = {
   dataset: {
     projects: [
@@ -130,6 +139,7 @@ const snapshot: StudyFrameSnapshot = {
         commonMistakes: ["Leaving the window in ms."],
         supportConfidence: 0.9,
         generatedAt: "2026-05-29T20:00:00.000Z",
+        generationMetadataJson: llmMetadata,
       },
     ],
     questionTopics: [
@@ -163,6 +173,7 @@ const snapshot: StudyFrameSnapshot = {
         commonTrapsMarkdown: "Use seconds, not ms.",
         subtypeCoverageJson: { "Firing rate": 1 },
         firstExposureComplete: false,
+        generationMetadataJson: llmMetadata,
       },
     ],
     practiceItems: [
@@ -190,6 +201,7 @@ const snapshot: StudyFrameSnapshot = {
         stepByStepSolutionMarkdown: "1. Divide spikes by seconds.",
         commonMistakesMarkdown: "- Leaving the window in ms.",
         supportConfidence: 0.9,
+        generationMetadataJson: llmMetadata,
       },
     ],
   },
@@ -209,6 +221,7 @@ const snapshot: StudyFrameSnapshot = {
         missingRubricLabels: [],
         feedback: "Correct.",
         nextStep: "Continue.",
+        generationMetadataJson: llmMetadata,
       },
       score: 10,
       maxScore: 10,
@@ -246,6 +259,7 @@ const snapshot: StudyFrameSnapshot = {
       sourceQuestionIds: ["question-1"],
       generationReason: "exhausted_real_questions",
       createdAt: "2026-05-29T20:03:00.000Z",
+      generationMetadataJson: llmMetadata,
     },
   ],
 };

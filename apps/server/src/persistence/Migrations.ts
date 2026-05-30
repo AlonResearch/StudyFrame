@@ -46,6 +46,7 @@ import Migration0030 from "./Migrations/030_ProjectionThreadShellArchiveIndexes.
 import Migration0031 from "./Migrations/031_StudyFrameSchema.ts";
 import Migration0032 from "./Migrations/032_StudyFramePersistencePatch.ts";
 import Migration0033 from "./Migrations/033_StudyFrameDomainModel.ts";
+import Migration0034 from "./Migrations/034_StudyFrameLlmMetadata.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -91,6 +92,7 @@ export const migrationEntries = [
   [31, "StudyFrameSchema", Migration0031],
   [32, "StudyFramePersistencePatch", Migration0032],
   [33, "StudyFrameDomainModel", Migration0033],
+  [34, "StudyFrameLlmMetadata", Migration0034],
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>

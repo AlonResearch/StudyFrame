@@ -254,6 +254,7 @@ function derivePracticeSupport(
           .join("\n"),
         commonMistakesMarkdown: support.commonMistakes.map((mistake) => `- ${mistake}`).join("\n"),
         supportConfidence: support.supportConfidence,
+        generationMetadataJson: support.generationMetadataJson ?? null,
       },
     ];
   });

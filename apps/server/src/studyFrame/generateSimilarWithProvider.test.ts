@@ -144,12 +144,13 @@ it.effect("returns prompt-only variants after real-question exhaustion", () =>
 
     assert.isTrue(Option.isSome(variants));
     if (Option.isNone(variants)) return;
-    assert.deepEqual(variants.value, [
+    assert.deepEqual(variants.value.variants, [
       {
         sourceQuestionId: "question-rate",
         promptMarkdown: "Compute the firing rate for a new spike count and duration.",
       },
     ]);
+    assert.equal(variants.value.generationMetadataJson.promptVersion, "studyframe-generation-v1");
   }),
 );
 

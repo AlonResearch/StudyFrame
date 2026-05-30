@@ -106,6 +106,7 @@ it.effect("returns AI grading from the configured provider", () =>
     assert.equal(feedback.value.gradingMode, "ai");
     assert.equal(feedback.value.scorePercent, 100);
     assert.deepEqual(feedback.value.matchedRubricLabels, ["firing rate"]);
+    assert.equal(feedback.value.generationMetadataJson?.promptVersion, "studyframe-feedback-v1");
   }),
 );
 

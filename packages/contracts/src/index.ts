@@ -24,3 +24,4 @@ export * from "./rpc.ts";
 export * from "./study.ts";
 export * from "./studyFeedback.ts";
 export * from "./studyGeneration.ts";
+export * from "./studyLlm.ts";

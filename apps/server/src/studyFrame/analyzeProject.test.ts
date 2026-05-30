@@ -160,6 +160,10 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
       assert.deepEqual(analyzed.snapshot.dataset.practiceSupport?.[0]?.expectedAnswerJson, [
         "4 Hz",
       ]);
+      assert.equal(
+        analyzed.snapshot.dataset.topicModules?.[0]?.generationMetadataJson?.promptVersion,
+        "studyframe-analysis-v1",
+      );
     }),
   );
 

@@ -1,14 +1,10 @@
-import type {
-  StudyGeneratedVariant,
-  StudyGenerateSimilarInput,
-  StudyGenerateSimilarResponse,
-} from "@t3tools/contracts";
+import type { StudyGenerateSimilarInput, StudyGenerateSimilarResponse } from "@t3tools/contracts";
 
 import { resolvePrimaryEnvironmentHttpUrl } from "~/environments/primary";
 
 export async function requestStudyGeneratedVariants(
   input: StudyGenerateSimilarInput,
-): Promise<readonly StudyGeneratedVariant[] | null> {
+): Promise<StudyGenerateSimilarResponse | null> {
   const response = await fetch(
     resolvePrimaryEnvironmentHttpUrl("/api/studyframe/generate-similar"),
     {
@@ -20,5 +16,5 @@ export async function requestStudyGeneratedVariants(
   );
 
   if (!response.ok) return null;
-  return ((await response.json()) as StudyGenerateSimilarResponse).variants;
+  return (await response.json()) as StudyGenerateSimilarResponse;
 }

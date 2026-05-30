@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import type { ModelSelection, StudyLlmGenerationMetadata } from "@t3tools/contracts";
 
 import { ProviderInstanceRegistry } from "../provider/Services/ProviderInstanceRegistry.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
@@ -25,3 +26,19 @@ export const resolveOptionalStudyFrameTextGeneration = Effect.gen(function* () {
     modelSelection: settings.textGenerationModelSelection,
   });
 });
+
+export function makeStudyFrameLlmMetadata(
+  modelSelection: ModelSelection,
+  promptVersion: string,
+  generatedAt: string,
+  rawStructuredResult?: unknown,
+): StudyLlmGenerationMetadata {
+  return {
+    providerInstanceId: modelSelection.instanceId,
+    model: modelSelection.model,
+    promptVersion,
+    generatedAt,
+    warnings: [],
+    ...(rawStructuredResult === undefined ? {} : { rawStructuredResult }),
+  };
+}

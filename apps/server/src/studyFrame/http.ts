@@ -275,7 +275,10 @@ export const studyFrameGenerateSimilarRouteLayer = HttpRouter.add(
     );
 
     return HttpServerResponse.jsonUnsafe(
-      { variants: Option.getOrNull(variants) },
+      Option.match(variants, {
+        onNone: () => ({ variants: null, generationMetadataJson: null }),
+        onSome: (value) => value,
+      }),
       { status: 200, headers: browserApiCorsHeaders },
     );
   }).pipe(
