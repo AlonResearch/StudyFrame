@@ -18,11 +18,11 @@ function makeSnapshot(state: StudyFrameStoreState): StudyFrameSnapshot {
   };
 }
 
-function initialSelectedTopicThreadId(snapshot: StudyFrameSnapshot) {
+function initialSelectedTopicThreadId(snapshot: StudyFrameSnapshot, projectId: string | null) {
   return (
-    [...snapshot.dataset.topicThreads].sort(
-      (left, right) => right.priorityScore - left.priorityScore,
-    )[0]?.id ?? null
+    [...snapshot.dataset.topicThreads]
+      .filter((thread) => projectId === null || thread.projectId === projectId)
+      .sort((left, right) => right.priorityScore - left.priorityScore)[0]?.id ?? null
   );
 }
 
@@ -34,8 +34,10 @@ function applyServerSnapshot(snapshot: StudyFrameSnapshot) {
     dataset.projects[0]?.id ??
     "";
   const selectedTopicThreadId =
-    dataset.topicThreads.find((thread) => thread.id === current.selectedTopicThreadId)?.id ??
-    initialSelectedTopicThreadId({ ...snapshot, dataset });
+    dataset.topicThreads.find(
+      (thread) =>
+        thread.id === current.selectedTopicThreadId && thread.projectId === selectedProjectId,
+    )?.id ?? initialSelectedTopicThreadId({ ...snapshot, dataset }, selectedProjectId);
   const activeQuestionId =
     dataset.questions.find((question) => question.id === current.activeQuestionId)?.id ??
     (selectedTopicThreadId

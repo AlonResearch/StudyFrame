@@ -107,7 +107,9 @@ Every StudyFrame HTTP route authenticates through `ServerAuth`. Invalid request 
 `apps/web/src/main.tsx` installs the TanStack router. Study routes render
 `apps/web/src/components/study/StudyWorkspace.tsx`; inherited route names remain under `_chat`, but
 their primary visible content is the study workspace. `StudySidebar.tsx` drives folder import,
-JSON import, project analysis, topic selection, settings navigation, and demo reset.
+JSON import, project analysis, course selection, nested topic-thread selection, settings
+navigation, and demo reset. On `/settings/*` routes the shell sidebar renders the inherited settings
+section navigation instead of the course/topic tree.
 
 On workspace mount, `apps/web/src/study/studyServerSync.ts`:
 

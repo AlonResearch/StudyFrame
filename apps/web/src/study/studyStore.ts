@@ -42,10 +42,11 @@ function makeId(prefix: string) {
   return `${prefix}-${randomUUID()}`;
 }
 
-function initialSelectedTopicThreadId(dataset: StudyDataset) {
+function initialSelectedTopicThreadId(dataset: StudyDataset, projectId: string | null = null) {
   return (
-    [...dataset.topicThreads].sort((left, right) => right.priorityScore - left.priorityScore)[0]
-      ?.id ?? null
+    [...dataset.topicThreads]
+      .filter((thread) => projectId === null || thread.projectId === projectId)
+      .sort((left, right) => right.priorityScore - left.priorityScore)[0]?.id ?? null
   );
 }
 
@@ -64,6 +65,7 @@ export interface StudyFrameStoreState {
   readonly solutionOpenQuestionIds: Record<string, boolean>;
   readonly exhaustionSummaryId: string | null;
   readonly reviewModeTopicThreadId: string | null;
+  readonly selectProject: (projectId: string) => void;
   readonly selectTopicThread: (topicThreadId: string) => void;
   readonly selectQuestion: (questionId: string) => void;
   readonly setAnswerDraft: (questionId: string, answer: string) => void;
@@ -81,7 +83,11 @@ export interface StudyFrameStoreState {
   readonly resetStudyProgress: () => void;
 }
 
-const seedSelectedTopicThreadId = initialSelectedTopicThreadId(studySeedData);
+const seedSelectedProjectId = studySeedData.projects[0]?.id ?? "";
+const seedSelectedTopicThreadId = initialSelectedTopicThreadId(
+  studySeedData,
+  seedSelectedProjectId,
+);
 const seedActiveQuestionId = seedSelectedTopicThreadId
   ? (getNextRealQuestion(studySeedData, [], seedSelectedTopicThreadId)?.id ?? null)
   : null;
@@ -93,7 +99,7 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
       attempts: [],
       completionSummaries: [],
       generatedQuestionBatches: [],
-      selectedProjectId: studySeedData.projects[0]?.id ?? "",
+      selectedProjectId: seedSelectedProjectId,
       selectedTopicThreadId: seedSelectedTopicThreadId,
       activeQuestionId: seedActiveQuestionId,
       answerDraftByQuestionId: {},
@@ -104,14 +110,33 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
       exhaustionSummaryId: null,
       reviewModeTopicThreadId: null,
 
+      selectProject: (projectId) => {
+        const state = get();
+        const selectedTopicThreadId = initialSelectedTopicThreadId(state.dataset, projectId);
+        const nextQuestion = selectedTopicThreadId
+          ? resolveNextQuestionForTopic(state.dataset, state.attempts, selectedTopicThreadId)
+          : null;
+        set({
+          selectedProjectId: projectId,
+          selectedTopicThreadId,
+          activeQuestionId: nextQuestion?.id ?? null,
+          exhaustionSummaryId: null,
+          reviewModeTopicThreadId: null,
+        });
+      },
+
       selectTopicThread: (topicThreadId) => {
         const state = get();
+        const topicThread = state.dataset.topicThreads.find(
+          (thread) => thread.id === topicThreadId,
+        );
         const nextQuestion = resolveNextQuestionForTopic(
           state.dataset,
           state.attempts,
           topicThreadId,
         );
         set({
+          selectedProjectId: topicThread?.projectId ?? state.selectedProjectId,
           selectedTopicThreadId: topicThreadId,
           activeQuestionId: nextQuestion?.id ?? null,
           exhaustionSummaryId: null,
@@ -468,7 +493,10 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
       replaceDataset: (dataset) => {
         const normalizedDataset = withDerivedStudyDomainModel(dataset);
         const selectedProjectId = normalizedDataset.projects[0]?.id ?? "";
-        const selectedTopicThreadId = initialSelectedTopicThreadId(normalizedDataset);
+        const selectedTopicThreadId = initialSelectedTopicThreadId(
+          normalizedDataset,
+          selectedProjectId,
+        );
         const activeQuestionId = selectedTopicThreadId
           ? (getNextRealQuestion(normalizedDataset, [], selectedTopicThreadId)?.id ?? null)
           : null;
@@ -496,7 +524,7 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
           attempts: [],
           completionSummaries: [],
           generatedQuestionBatches: [],
-          selectedProjectId: studySeedData.projects[0]?.id ?? "",
+          selectedProjectId: seedSelectedProjectId,
           selectedTopicThreadId: seedSelectedTopicThreadId,
           activeQuestionId: seedActiveQuestionId,
           answerDraftByQuestionId: {},

@@ -1,6 +1,7 @@
 import {
   BookOpenIcon,
   CircleAlertIcon,
+  ChevronRightIcon,
   FileJsonIcon,
   FilePlus2Icon,
   GraduationCapIcon,
@@ -10,12 +11,13 @@ import {
   UploadIcon,
   WandSparklesIcon,
 } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { APP_DISPLAY_NAME, APP_VERSION } from "~/branding";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
+import { SettingsSidebarNav } from "~/components/settings/SettingsSidebarNav";
 import {
   Dialog,
   DialogDescription,
@@ -33,7 +35,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarSeparator,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarTrigger,
 } from "~/components/ui/sidebar";
 import { Input } from "~/components/ui/input";
@@ -47,10 +51,13 @@ import type { StudyDataset } from "~/study/studyTypes";
 import { cn } from "~/lib/utils";
 
 export function StudySidebar() {
+  const pathname = useLocation({ select: (location) => location.pathname });
+  const isOnSettings = pathname.startsWith("/settings");
   const dataset = useStudyFrameStore((state) => state.dataset);
   const attempts = useStudyFrameStore((state) => state.attempts);
   const selectedProjectId = useStudyFrameStore((state) => state.selectedProjectId);
   const selectedTopicThreadId = useStudyFrameStore((state) => state.selectedTopicThreadId);
+  const selectProject = useStudyFrameStore((state) => state.selectProject);
   const selectTopicThread = useStudyFrameStore((state) => state.selectTopicThread);
   const replaceDataset = useStudyFrameStore((state) => state.replaceDataset);
   const resetStudyProgress = useStudyFrameStore((state) => state.resetStudyProgress);
@@ -61,9 +68,20 @@ export function StudySidebar() {
     readonly message: string;
   } | null>(null);
   const project = dataset.projects.find((candidate) => candidate.id === selectedProjectId);
-  const topicThreads = dataset.topicThreads
-    .filter((thread) => thread.projectId === selectedProjectId)
-    .sort((left, right) => right.priorityScore - left.priorityScore);
+  const courseProjects = dataset.projects;
+  const sortedTopicThreads = [...dataset.topicThreads].sort(
+    (left, right) => right.priorityScore - left.priorityScore,
+  );
+
+  if (isOnSettings) {
+    return (
+      <>
+        <StudySidebarHeader subtitle="Settings" />
+        <SettingsSidebarNav pathname={pathname} />
+      </>
+    );
+  }
+
   const handleAnalyzeProject = () => {
     if (!selectedProjectId || analyzingProject) return;
     setAnalyzingProject(true);
@@ -90,16 +108,7 @@ export function StudySidebar() {
   return (
     <>
       <SidebarHeader className="gap-3 border-b border-border px-3 py-3">
-        <div className="flex items-center gap-2">
-          <SidebarTrigger className="size-7 shrink-0 md:hidden" />
-          <div className="flex size-8 items-center justify-center rounded-lg border border-border bg-background text-foreground">
-            <GraduationCapIcon className="size-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">{APP_DISPLAY_NAME}</div>
-            <div className="truncate text-xs text-muted-foreground">Real-question practice</div>
-          </div>
-        </div>
+        <StudySidebarHeaderContent subtitle="Real-question practice" />
 
         <Button
           className="w-full justify-start"
@@ -114,98 +123,143 @@ export function StudySidebar() {
 
       <SidebarContent>
         <SidebarGroup className="px-2 py-3">
-          <div className="px-2 pb-2 text-xs font-medium text-muted-foreground">Course</div>
-          <div className="rounded-lg border border-border bg-background/60 p-3">
-            <div className="flex items-start gap-2">
-              <BookOpenIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium">{project?.name ?? "No course"}</div>
-                <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                  {project?.sourceRoot ?? "No source repository selected."}
-                </div>
-              </div>
-            </div>
-            {project && project.extractionWarnings.length > 0 ? (
-              <div className="mt-3 flex items-start gap-2 rounded-md border border-warning/20 bg-warning/8 px-2 py-1.5 text-xs text-warning-foreground">
-                <CircleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
-                <span>{project.extractionWarnings.length} extraction warnings</span>
-              </div>
-            ) : null}
-            <Button
-              className="mt-3 w-full justify-start"
-              size="sm"
-              variant="outline"
-              disabled={!project || analyzingProject}
-              onClick={handleAnalyzeProject}
-            >
-              {analyzingProject ? (
-                <LoaderCircleIcon className="size-4 animate-spin" />
-              ) : (
-                <WandSparklesIcon className="size-4" />
-              )}
-              {analyzingProject ? "Analyzing" : "Analyze course"}
-            </Button>
-            {analysisStatus ? (
-              <div
-                className={cn(
-                  "mt-2 text-xs",
-                  analysisStatus.tone === "error"
-                    ? "text-destructive-foreground"
-                    : "text-muted-foreground",
-                )}
-              >
-                {analysisStatus.message}
-              </div>
-            ) : null}
-          </div>
-        </SidebarGroup>
-
-        <SidebarSeparator />
-
-        <SidebarGroup className="px-2 py-3">
-          <div className="px-2 pb-2 text-xs font-medium text-muted-foreground">Topic threads</div>
+          <div className="px-2 pb-2 text-xs font-medium text-muted-foreground">Courses</div>
           <SidebarMenu>
-            {topicThreads.map((thread) => {
-              const questions = getQuestionsForTopicThread(dataset, thread.id);
-              const realQuestions = questions.filter((question) => question.isRealQuestion);
-              const generatedQuestions = questions.length - realQuestions.length;
-              const attempted = realQuestions.filter(
-                (question) => getBestAttempt(attempts, question.id) !== null,
-              ).length;
-              const isActive = selectedTopicThreadId === thread.id;
+            {courseProjects.map((courseProject) => {
+              const isProjectActive = selectedProjectId === courseProject.id;
+              const projectTopicThreads = sortedTopicThreads.filter(
+                (thread) => thread.projectId === courseProject.id,
+              );
+              const projectQuestionCount = projectTopicThreads.reduce(
+                (count, thread) =>
+                  count +
+                  getQuestionsForTopicThread(dataset, thread.id).filter(
+                    (question) => question.isRealQuestion,
+                  ).length,
+                0,
+              );
 
               return (
-                <SidebarMenuItem key={thread.id}>
+                <SidebarMenuItem key={courseProject.id}>
                   <SidebarMenuButton
-                    isActive={isActive}
-                    className={cn("h-auto items-start py-2", isActive && "bg-sidebar-accent")}
-                    onClick={() => selectTopicThread(thread.id)}
+                    isActive={isProjectActive}
+                    className="h-auto items-start gap-2 py-2"
+                    onClick={() => selectProject(courseProject.id)}
                     render={<button type="button" />}
                   >
+                    <ChevronRightIcon
+                      className={cn(
+                        "mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform",
+                        isProjectActive && "rotate-90",
+                      )}
+                    />
                     <div className="flex min-w-0 flex-1 flex-col gap-1 text-left">
                       <div className="flex min-w-0 items-center gap-2">
-                        <span className="truncate text-sm font-medium">{thread.displayName}</span>
-                        {generatedQuestions > 0 ? (
+                        <BookOpenIcon className="size-4 shrink-0 text-muted-foreground" />
+                        <span className="truncate text-sm font-medium">{courseProject.name}</span>
+                        {courseProject.extractionWarnings.length > 0 ? (
                           <Badge size="sm" variant="outline">
-                            {generatedQuestions} gen
+                            {courseProject.extractionWarnings.length} warn
                           </Badge>
                         ) : null}
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>
-                          {attempted}/{realQuestions.length} real
-                        </span>
-                        <span>Priority {Math.round(thread.priorityScore * 100)}</span>
+                        <span>{projectTopicThreads.length} topics</span>
+                        <span>{projectQuestionCount} real questions</span>
                       </div>
-                      <ProgressBar
-                        value={realQuestions.length === 0 ? 0 : attempted / realQuestions.length}
-                      />
+                      <div className="line-clamp-1 text-xs text-muted-foreground/80">
+                        {courseProject.sourceRoot}
+                      </div>
                     </div>
                   </SidebarMenuButton>
+                  {isProjectActive ? (
+                    <SidebarMenuSub>
+                      {projectTopicThreads.map((thread) => {
+                        const questions = getQuestionsForTopicThread(dataset, thread.id);
+                        const realQuestions = questions.filter(
+                          (question) => question.isRealQuestion,
+                        );
+                        const generatedQuestions = questions.length - realQuestions.length;
+                        const attempted = realQuestions.filter(
+                          (question) => getBestAttempt(attempts, question.id) !== null,
+                        ).length;
+                        const isActive = selectedTopicThreadId === thread.id;
+
+                        return (
+                          <SidebarMenuSubItem key={thread.id}>
+                            <SidebarMenuSubButton
+                              isActive={isActive}
+                              className="h-auto items-start py-2"
+                              onClick={() => selectTopicThread(thread.id)}
+                              render={<button type="button" />}
+                            >
+                              <div className="flex min-w-0 flex-1 flex-col gap-1 text-left">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span className="truncate text-sm font-medium">
+                                    {thread.displayName}
+                                  </span>
+                                  {generatedQuestions > 0 ? (
+                                    <Badge size="sm" variant="outline">
+                                      {generatedQuestions} gen
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <span>
+                                    {attempted}/{realQuestions.length} real
+                                  </span>
+                                  <span>Priority {Math.round(thread.priorityScore * 100)}</span>
+                                </div>
+                                <ProgressBar
+                                  value={
+                                    realQuestions.length === 0
+                                      ? 0
+                                      : attempted / realQuestions.length
+                                  }
+                                />
+                              </div>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        );
+                      })}
+                    </SidebarMenuSub>
+                  ) : null}
                 </SidebarMenuItem>
               );
             })}
           </SidebarMenu>
+          {project && project.extractionWarnings.length > 0 ? (
+            <div className="mt-3 flex items-start gap-2 rounded-md border border-warning/20 bg-warning/8 px-2 py-1.5 text-xs text-warning-foreground">
+              <CircleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
+              <span>{project.extractionWarnings.length} extraction warnings</span>
+            </div>
+          ) : null}
+          <Button
+            className="mt-3 w-full justify-start"
+            size="sm"
+            variant="outline"
+            disabled={!project || analyzingProject}
+            onClick={handleAnalyzeProject}
+          >
+            {analyzingProject ? (
+              <LoaderCircleIcon className="size-4 animate-spin" />
+            ) : (
+              <WandSparklesIcon className="size-4" />
+            )}
+            {analyzingProject ? "Analyzing" : "Analyze course"}
+          </Button>
+          {analysisStatus ? (
+            <div
+              className={cn(
+                "mt-2 px-2 text-xs",
+                analysisStatus.tone === "error"
+                  ? "text-destructive-foreground"
+                  : "text-muted-foreground",
+              )}
+            >
+              {analysisStatus.message}
+            </div>
+          ) : null}
         </SidebarGroup>
       </SidebarContent>
 
@@ -240,6 +294,29 @@ export function StudySidebar() {
         }}
       />
     </>
+  );
+}
+
+function StudySidebarHeader({ subtitle }: { readonly subtitle: string }) {
+  return (
+    <SidebarHeader className="gap-3 border-b border-border px-3 py-3">
+      <StudySidebarHeaderContent subtitle={subtitle} />
+    </SidebarHeader>
+  );
+}
+
+function StudySidebarHeaderContent({ subtitle }: { readonly subtitle: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <SidebarTrigger className="size-7 shrink-0 md:hidden" />
+      <div className="flex size-8 items-center justify-center rounded-lg border border-border bg-background text-foreground">
+        <GraduationCapIcon className="size-4" />
+      </div>
+      <div className="min-w-0">
+        <div className="truncate text-sm font-semibold">{APP_DISPLAY_NAME}</div>
+        <div className="truncate text-xs text-muted-foreground">{subtitle}</div>
+      </div>
+    </div>
   );
 }
 
