@@ -1,8 +1,14 @@
 # StudyFrame Upstream Policy
 
-StudyFrame is a product fork of T3 Code, not a thin UI skin. The main StudyFrame experience is
-allowed to overhaul and prune T3 Code's chat-first agent workflow so the app can become a focused
-real-questions-first spaced learning workspace.
+StudyFrame is a downstream product fork of T3 Code, not a thin UI skin and not a branch intended
+to merge back upstream. The main StudyFrame experience is allowed to overhaul and prune T3 Code's
+chat-first agent workflow so the app can become a focused real-questions-first spaced learning
+workspace.
+
+The maintenance flow is one-way: pull useful upstream changes into StudyFrame when they improve the
+backend, providers, runtime infrastructure, security, settings, desktop support, or another feature
+StudyFrame actually needs. Do not shape StudyFrame work around upstream contribution, upstream pull
+requests, or keeping the coding-agent UI compatible.
 
 The upstream boundary is selective:
 
@@ -24,8 +30,9 @@ git remote set-url --push upstream DISABLED
 ```
 
 The local `upstream` remote should be fetch-only. StudyFrame changes should be organized so
-upstream backend/provider/config updates can be applied without needing to keep upstream's main
-agent UI.
+upstream backend/provider/config updates can be applied into this fork without needing to keep
+upstream's main agent UI. Never push StudyFrame commits to `upstream` or prepare them as an
+upstream PR unless that is explicitly requested as a separate task.
 
 ## Version Rule
 
@@ -104,11 +111,14 @@ For the current base, use:
 git fetch upstream main --tags
 ```
 
-2. Rebase or merge upstream before adding more StudyFrame work.
+2. Integrate upstream into StudyFrame before adding more StudyFrame work.
 
 ```bash
 git rebase upstream/main
 ```
+
+Use a rebase, merge, or cherry-pick based on conflict size, but the direction is always
+`upstream/main` into the StudyFrame fork. Do not merge StudyFrame back into T3 Code.
 
 3. Confirm dependency-owned files are unchanged by StudyFrame product work.
 
