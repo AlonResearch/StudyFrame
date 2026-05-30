@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { randomUUID } from "~/lib/utils";
 import { withDerivedStudyDomainModel, withRegeneratedStudyPracticeModel } from "./studyDomainModel";
 import { requestStudyFeedback } from "./studyFeedback";
+import { requestStudyGeneratedVariants } from "./studyGeneration";
 import {
   checkDirection,
   createCompletionSummary,
@@ -419,6 +420,36 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
           exhaustionSummaryId: null,
           reviewModeTopicThreadId: null,
         });
+        void requestStudyGeneratedVariants({
+          topicThreadId,
+          sourceQuestionIds: sourceQuestions.map((question) => question.id),
+        })
+          .then((variants) => {
+            if (!variants || variants.length === 0) return;
+            const variantBySourceQuestionId = new Map(
+              variants.map((variant) => [variant.sourceQuestionId, variant]),
+            );
+            const generatedQuestionIds = new Set(generatedQuestions.map((question) => question.id));
+            set((current) => ({
+              dataset: withRegeneratedStudyPracticeModel({
+                ...current.dataset,
+                questions: current.dataset.questions.map((question) => {
+                  if (!generatedQuestionIds.has(question.id)) return question;
+                  const sourceQuestionId = question.generatedFromQuestionIds[0];
+                  const variant = sourceQuestionId
+                    ? variantBySourceQuestionId.get(sourceQuestionId)
+                    : undefined;
+                  if (!variant) return question;
+                  return {
+                    ...question,
+                    rawPrompt: variant.promptMarkdown,
+                    normalizedPrompt: variant.promptMarkdown.trim().toLowerCase(),
+                  };
+                }),
+              }),
+            }));
+          })
+          .catch(() => undefined);
       },
 
       dismissExhaustionSummary: () => {

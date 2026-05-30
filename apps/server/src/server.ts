@@ -93,6 +93,7 @@ import {
 import {
   studyFrameAnalyzeProjectRouteLayer,
   studyFrameFeedbackRouteLayer,
+  studyFrameGenerateSimilarRouteLayer,
   studyFrameImportFolderRouteLayer,
   studyFrameSnapshotGetRouteLayer,
   studyFrameSnapshotPutRouteLayer,
@@ -326,6 +327,7 @@ export const makeRoutesLayer = Layer.mergeAll(
   orchestrationSnapshotRouteLayer,
   studyFrameAnalyzeProjectRouteLayer,
   studyFrameFeedbackRouteLayer,
+  studyFrameGenerateSimilarRouteLayer,
   studyFrameImportFolderRouteLayer,
   studyFrameSnapshotGetRouteLayer,
   studyFrameSnapshotPutRouteLayer,
