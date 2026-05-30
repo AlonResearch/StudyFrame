@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  checkDirection,
   createCompletionSummary,
   getNextRealQuestion,
   getNotPerfectRealQuestions,
@@ -113,6 +114,34 @@ describe("studyLogic", () => {
 
     expect(feedback.status).toBe("partially_correct");
     expect(feedback.missingRubricLabels).toContain("Computes Fano factor as 12 / 8 = 1.5");
+  });
+
+  it("keeps direction checks free of answer markers and rubric labels", () => {
+    const question = studySeedData.questions.find(
+      (candidate) => candidate.id === "q-spike-2024-rate-fano",
+    )!;
+    const support = studySeedData.questionSupport.find(
+      (candidate) => candidate.questionId === question.id,
+    )!;
+
+    const feedback = checkDirection({
+      question,
+      support,
+      answer: "The window is 0.5 s, so rate is 16 Hz.",
+    });
+    const visibleFeedback = [feedback.feedback, feedback.nextStep].join(" ").toLowerCase();
+
+    expect(feedback.tone).toBe("direction");
+    expect(feedback.matchedRubricLabels).toEqual([]);
+    expect(feedback.missingRubricLabels).toEqual([]);
+    for (const forbidden of [
+      ...support.expectedAnswer,
+      ...support.rubric.map((item) => item.label),
+      ...support.solutionSteps,
+      ...support.commonMistakes,
+    ]) {
+      expect(visibleFeedback).not.toContain(forbidden.toLowerCase());
+    }
   });
 });
 

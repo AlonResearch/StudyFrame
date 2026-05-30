@@ -280,16 +280,19 @@ export function checkDirection(input: {
   const graded = gradeAnswer(input);
   const feedback =
     graded.scorePercent >= 70
-      ? "Your setup is moving in the right direction. Tighten the missing rubric item before submitting."
-      : "The current direction is missing core setup. Revisit the first hint and name the formula or decision rule before calculating.";
+      ? "Your setup is moving in the right direction. Tighten the reasoning before submitting."
+      : "The current direction is missing core setup. Revisit the first hint before calculating.";
 
   return {
     ...graded,
     tone: "direction",
+    matchedRubricLabels: [],
+    missingRubricLabels: [],
     feedback,
     nextStep:
-      graded.missingRubricLabels[0] ??
-      "Submit when your reasoning, units, and interpretation are all explicit.",
+      graded.scorePercent >= 70
+        ? "Submit when your reasoning, units, and interpretation are all explicit."
+        : "Name the relevant method and define the quantities you need.",
   };
 }
 

@@ -47,6 +47,7 @@ import {
   isRealQuestionScopeExhausted,
 } from "~/study/studyLogic";
 import { useStudyFrameStore } from "~/study/studyStore";
+import { getStudySupportVisibility, getVisibleSourceContextSupport } from "~/study/studyVisibility";
 import { installStudyFrameServerSync } from "~/study/studyServerSync";
 import type { StudyCompletionSummary, StudyQuestion } from "~/study/studyTypes";
 import { APP_DISPLAY_NAME } from "~/branding";
@@ -139,6 +140,17 @@ export function StudyWorkspace() {
   const latestHint = activeQuestion ? latestHintByQuestionId[activeQuestion.id] : undefined;
   const latestFeedback = activeQuestion ? latestFeedbackByQuestionId[activeQuestion.id] : undefined;
   const solutionOpen = activeQuestion ? solutionOpenQuestionIds[activeQuestion.id] === true : false;
+  const supportVisibility = getStudySupportVisibility({
+    questionId: activeQuestion?.id ?? null,
+    attempts,
+    solutionOpen,
+    reviewMode: reviewModeTopicThreadId === selectedTopicThreadId,
+  });
+  const sourceContextSupport = getVisibleSourceContextSupport({
+    supportSummary: activeSupport?.summaryContext ?? null,
+    expectedAnswer: activeSupport?.expectedAnswer ?? [],
+    visibility: supportVisibility,
+  });
   const exportName = (project?.name ?? "studyframe").toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
   return (
@@ -197,9 +209,15 @@ export function StudyWorkspace() {
                     answerDraft={answerDraft}
                     latestHint={latestHint}
                     latestFeedback={latestFeedback}
-                    solutionOpen={solutionOpen}
-                    solutionSteps={activeSupport?.solutionSteps ?? []}
-                    commonMistakes={activeSupport?.commonMistakes ?? []}
+                    solutionVisible={supportVisibility.solutionVisible}
+                    solutionSteps={
+                      supportVisibility.solutionVisible ? (activeSupport?.solutionSteps ?? []) : []
+                    }
+                    commonMistakes={
+                      supportVisibility.commonMistakesVisible
+                        ? (activeSupport?.commonMistakes ?? [])
+                        : []
+                    }
                     bestAttempt={getBestAttempt(attempts, activeQuestion.id)}
                     onAnswerDraftChange={(answer) => setAnswerDraft(activeQuestion.id, answer)}
                     onHint={() => requestHint(activeQuestion.id)}
@@ -223,8 +241,8 @@ export function StudyWorkspace() {
                         )?.title ?? null)
                       : null
                   }
-                  supportSummary={activeSupport?.summaryContext ?? null}
-                  expectedAnswer={activeSupport?.expectedAnswer ?? []}
+                  supportSummary={sourceContextSupport.supportSummary}
+                  expectedAnswer={sourceContextSupport.expectedAnswer}
                   extractionWarnings={project?.extractionWarnings ?? []}
                   realQuestionsRemaining={unattemptedRealQuestions.length}
                   notPerfectCount={notPerfectRealQuestions.length}
@@ -421,7 +439,7 @@ function QuestionPracticePanel({
   answerDraft,
   latestHint,
   latestFeedback,
-  solutionOpen,
+  solutionVisible,
   solutionSteps,
   commonMistakes,
   bestAttempt,
@@ -440,7 +458,7 @@ function QuestionPracticePanel({
   readonly latestFeedback:
     | ReturnType<typeof useStudyFrameStore.getState>["latestFeedbackByQuestionId"][string]
     | undefined;
-  readonly solutionOpen: boolean;
+  readonly solutionVisible: boolean;
   readonly solutionSteps: readonly string[];
   readonly commonMistakes: readonly string[];
   readonly bestAttempt: ReturnType<typeof getBestAttempt>;
@@ -515,7 +533,7 @@ function QuestionPracticePanel({
           </FeedbackBlock>
         ) : null}
 
-        {solutionOpen ? (
+        {solutionVisible ? (
           <SolutionBlock solutionSteps={solutionSteps} commonMistakes={commonMistakes} />
         ) : null}
       </div>
