@@ -1,0 +1,50 @@
+{
+  "datasetId": "signal-data-analysis",
+  "defaultRoot": "G:\\My Drive\\Bar-Ilan\\Signal and Data Analysis\\Quiz",
+  "rawInputRules": {
+    "include": ["**/*"],
+    "excludeFromAnalysis": [
+      "Study_Summary_L1_to_Information_Theory.md",
+      "Quiz_Topic_Priority_Report.md",
+      "Topic_01_Spike_Train_Statistics.md",
+      "Topic_02_Information_Theory.md",
+      "revised-plan-*.md",
+      "studyframe-golden-dataset-qa-and-self-correction-plan.md",
+      "_quiz_text/**",
+      "_docx_media_checks/**",
+      "_pdf_checks/**",
+      "study_app/**"
+    ],
+    "roleOverrides": {
+      "Study_Summary_L1_to_Information_Theory.md": "generated_export",
+      "Quiz_Topic_Priority_Report.md": "generated_export",
+      "Topic_01_Spike_Train_Statistics.md": "generated_export",
+      "Topic_02_Information_Theory.md": "generated_export",
+      "revised-plan-*.md": "generated_export",
+      "studyframe-golden-dataset-qa-and-self-correction-plan.md": "generated_export"
+    }
+  },
+  "expectedTopics": [
+    "Spike-train statistics",
+    "Information theory",
+    "ML/MAP/Bayes",
+    "Sampling/filtering/spectral analysis",
+    "ROC/discrimination",
+    "Correlation/correlograms",
+    "PSTH/rate estimation",
+    "STA/encoding",
+    "SNR/noise/stationarity",
+    "PCA/dimensionality reduction"
+  ],
+  "expectedPriorityOrder": {
+    "top3": ["Spike-train statistics", "Information theory"],
+    "top5": ["ML/MAP/Bayes"]
+  },
+  "expectedKnownAssets": ["2023 Quiz 3 WMF/vector assets"],
+  "expectedWarnings": ["WMF/vector assets require manual review"],
+  "exportGoldenReferences": [
+    "Quiz_Topic_Priority_Report.md",
+    "Topic_01_Spike_Train_Statistics.md",
+    "Topic_02_Information_Theory.md"
+  ]
+}

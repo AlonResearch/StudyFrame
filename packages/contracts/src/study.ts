@@ -377,8 +377,19 @@ export type StudyFrameSnapshotResponse = typeof StudyFrameSnapshotResponse.Type;
 export const StudyImportFolderInput = Schema.Struct({
   projectId: Schema.optionalKey(Schema.String),
   sourceRoot: Schema.String,
+  manifestId: Schema.optionalKey(Schema.String),
 });
 export type StudyImportFolderInput = typeof StudyImportFolderInput.Type;
+
+export const StudySourceScanResult = Schema.Struct({
+  registeredDocumentCount: Schema.Number,
+  analysisDocumentCount: Schema.Number,
+  excludedDocumentCount: Schema.Number,
+  questionCandidateCount: Schema.Number,
+  sourceAssetCount: Schema.Number,
+  warningCount: Schema.Number,
+});
+export type StudySourceScanResult = typeof StudySourceScanResult.Type;
 
 export const StudyExtractionResult = Schema.Struct({
   projectId: Schema.String,
@@ -387,6 +398,7 @@ export const StudyExtractionResult = Schema.Struct({
   sourceAssetCount: Schema.Number,
   questionCandidateCount: Schema.Number,
   warnings: Schema.Array(Schema.String),
+  scan: StudySourceScanResult,
 });
 export type StudyExtractionResult = typeof StudyExtractionResult.Type;
 
@@ -420,3 +432,33 @@ export const StudyAnalyzeProjectResponse = Schema.Struct({
   result: StudyAnalysisResult,
 });
 export type StudyAnalyzeProjectResponse = typeof StudyAnalyzeProjectResponse.Type;
+
+export const StudyFrameQaFailure = Schema.Struct({
+  id: Schema.String,
+  severity: Schema.Literals(["blocker", "major", "minor"]),
+  stage: Schema.String,
+  message: Schema.String,
+  evidence: Schema.Array(Schema.String),
+  suggestedFiles: Schema.Array(Schema.String),
+});
+export type StudyFrameQaFailure = typeof StudyFrameQaFailure.Type;
+
+export const StudyFrameQaStageResult = Schema.Struct({
+  id: Schema.String,
+  passed: Schema.Boolean,
+  message: Schema.String,
+});
+export type StudyFrameQaStageResult = typeof StudyFrameQaStageResult.Type;
+
+export const StudyFrameGoldenQaReport = Schema.Struct({
+  datasetId: Schema.String,
+  sourceRoot: Schema.String,
+  startedAt: IsoString,
+  completedAt: IsoString,
+  passed: Schema.Boolean,
+  stages: Schema.Array(StudyFrameQaStageResult),
+  artifacts: Schema.Array(Schema.String),
+  screenshots: Schema.Array(Schema.String),
+  failures: Schema.Array(StudyFrameQaFailure),
+});
+export type StudyFrameGoldenQaReport = typeof StudyFrameGoldenQaReport.Type;

@@ -25,6 +25,12 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import type * as PlatformError from "effect/PlatformError";
 
+import {
+  getStudyFrameImportManifest,
+  matchesManifestPattern,
+  type StudyFrameImportManifest,
+} from "./golden/manifest.ts";
+
 const EXCLUDED_DIRECTORIES = new Set([
   ".git",
   ".svn",
@@ -46,6 +52,7 @@ const IMAGE_EXTENSIONS = new Set([
   ".tif",
   ".tiff",
 ]);
+const VECTOR_IMAGE_EXTENSIONS = new Set([".emf", ".wmf"]);
 const DATA_EXTENSIONS = new Set([
   ".csv",
   ".mat",
@@ -75,6 +82,13 @@ interface CandidateDraft {
   readonly rawPromptMarkdown: string;
   readonly label: string;
   readonly pointValue: number | null;
+}
+
+interface EmbeddedDocxAsset {
+  readonly sourceAnchor: string;
+  readonly localUri: string | null;
+  readonly extractionConfidence: number;
+  readonly warning: string | null;
 }
 
 export class StudyFrameImportFolderError extends Data.TaggedError("StudyFrameImportFolderError")<{
@@ -111,6 +125,10 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
   const now = DateTime.formatIso(yield* DateTime.now);
   const projectName = path.basename(sourceRoot) || "Imported course";
   const projectId = input.projectId ?? `project-${stableSlug(projectName) || "imported-course"}`;
+  const manifest = getStudyFrameImportManifest(input.manifestId);
+  if (input.manifestId && !manifest) {
+    return yield* fileImportError({ message: `Unknown StudyFrame manifest: ${input.manifestId}` });
+  }
   const files = yield* scanFiles({ fs, path, sourceRoot });
   const orderedFiles = files.toSorted(
     (left, right) =>
@@ -126,9 +144,17 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
   const questionTopics: StudyQuestionTopic[] = [];
   const warnings: string[] = [];
   const originalQuestionFingerprints = new Set<string>();
+  let analysisDocumentCount = 0;
+  let excludedDocumentCount = 0;
 
   for (const file of orderedFiles) {
-    const classification = classifySourceFile(file.relativePath);
+    const excludedFromAnalysis = isExcludedFromAnalysis(file.relativePath, manifest);
+    const classification = classifySourceFile(file.relativePath, manifest);
+    if (excludedFromAnalysis) {
+      excludedDocumentCount += 1;
+    } else {
+      analysisDocumentCount += 1;
+    }
     const year = extractYear(file.relativePath);
     const quizLabel = makeQuizLabel(file.relativePath, year);
     const sourceDocumentId = `source-${stableSlug(file.relativePath) || stableHash(file.relativePath)}`;
@@ -137,10 +163,15 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
     if (classification.canExtractText) {
       extraction = yield* extractText(fs, file.absolutePath, classification.fileType);
     }
+    const embeddedDocxAssets =
+      classification.fileType === "docx"
+        ? yield* extractDocxAssets(fs, file.absolutePath, file.relativePath)
+        : [];
 
     const documentWarnings = [
       ...classification.warnings,
       ...extraction.warnings.map((warning) => `${file.relativePath}: ${warning}`),
+      ...embeddedDocxAssets.flatMap((asset) => (asset.warning ? [asset.warning] : [])),
     ];
     warnings.push(...documentWarnings);
     sourceDocuments.push({
@@ -168,8 +199,26 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
         extractionConfidence: extraction.confidence,
       });
     }
+    const embeddedAssetIds = embeddedDocxAssets.map((asset) => {
+      const assetId = `asset-${stableSlug(asset.sourceAnchor) || stableHash(asset.sourceAnchor)}`;
+      sourceAssets.push({
+        id: assetId,
+        documentId: sourceDocumentId,
+        kind: "image",
+        sourceAnchor: asset.sourceAnchor,
+        contentText: null,
+        contentJson: null,
+        localUri: asset.localUri,
+        extractionConfidence: asset.extractionConfidence,
+      });
+      return assetId;
+    });
 
-    if (!classification.canCreateQuestions || extraction.text.trim().length === 0) {
+    if (
+      excludedFromAnalysis ||
+      !classification.canCreateQuestions ||
+      extraction.text.trim().length === 0
+    ) {
       continue;
     }
 
@@ -187,7 +236,9 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
       }
       const candidateId = `candidate-${stableSlug(`${file.relativePath}-${draft.label}-${index + 1}`) || stableHash(`${file.relativePath}-${index}`)}`;
       const questionId = `q-${stableSlug(`${file.relativePath}-${draft.label}-${index + 1}`) || stableHash(candidateId)}`;
-      const needsManualReview = extraction.confidence < 0.8 || documentWarnings.length > 0;
+      const dependsOnAssets = embeddedAssetIds.length > 0;
+      const needsManualReview =
+        dependsOnAssets || extraction.confidence < 0.8 || documentWarnings.length > 0;
       const pointValue = draft.pointValue ?? 1;
 
       questionCandidates.push({
@@ -199,7 +250,7 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
         sourceYear: year,
         sourceQuizLabel: quizLabel ? `${quizLabel} ${draft.label}` : draft.label,
         pointValue,
-        assetIds: [],
+        assetIds: embeddedAssetIds,
         extractionConfidence: extraction.confidence,
         needsManualReview,
       });
@@ -215,7 +266,7 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
         pointValue,
         isRealQuestion: true,
         generatedFromQuestionIds: [],
-        dependsOnAssets: false,
+        dependsOnAssets,
         extractionConfidence: extraction.confidence,
         createdAt: now,
       });
@@ -302,6 +353,14 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
     sourceAssetCount: sourceAssets.length,
     questionCandidateCount: questionCandidates.length,
     warnings: dataset.projects[0]?.extractionWarnings ?? [],
+    scan: {
+      registeredDocumentCount: sourceDocuments.length,
+      analysisDocumentCount,
+      excludedDocumentCount,
+      questionCandidateCount: questionCandidates.length,
+      sourceAssetCount: sourceAssets.length,
+      warningCount: unique(warnings).length,
+    },
   };
 
   return { snapshot, result };
@@ -346,7 +405,10 @@ function scanFiles(input: {
   });
 }
 
-function classifySourceFile(relativePath: string): {
+function classifySourceFile(
+  relativePath: string,
+  manifest: StudyFrameImportManifest | null,
+): {
   readonly fileType: StudySourceFileType;
   readonly role: StudySourceDocument["role"];
   readonly canExtractText: boolean;
@@ -358,21 +420,24 @@ function classifySourceFile(relativePath: string): {
   const normalized = relativePath.toLowerCase();
   const fileType = sourceFileType(extension);
   const generatedExport = isGeneratedMarkdownExport(relativePath);
-  const role: StudySourceDocument["role"] = generatedExport
-    ? "generated_export"
-    : /(?:^|[/_. -])(?:ans|answers?|solutions?|rubric|official[_ -]?key)(?:[/_. -]|$)/.test(
-          normalized,
-        )
-      ? "solution"
-      : /lecture|slides|notes|alllec/.test(normalized)
-        ? "lecture"
-        : DATA_EXTENSIONS.has(extension) || IMAGE_EXTENSIONS.has(extension)
-          ? "data_asset"
-          : /quiz|exam|test|question|past/.test(normalized)
-            ? "quiz"
-            : DOCUMENT_EXTENSIONS.has(extension)
-              ? "unknown"
-              : "data_asset";
+  const overriddenRole = manifestRoleOverride(relativePath, manifest);
+  const role: StudySourceDocument["role"] = overriddenRole
+    ? overriddenRole
+    : generatedExport
+      ? "generated_export"
+      : /(?:^|[/_. -])(?:ans|answers?|solutions?|rubric|official[_ -]?key)(?:[/_. -]|$)/.test(
+            normalized,
+          )
+        ? "solution"
+        : /lecture|slides|notes|alllec/.test(normalized)
+          ? "lecture"
+          : DATA_EXTENSIONS.has(extension) || IMAGE_EXTENSIONS.has(extension)
+            ? "data_asset"
+            : /quiz|exam|test|question|past/.test(normalized)
+              ? "quiz"
+              : DOCUMENT_EXTENSIONS.has(extension)
+                ? "unknown"
+                : "data_asset";
   const warnings =
     extension === ".doc" ? ["Legacy DOC files can only be registered for manual review."] : [];
 
@@ -388,6 +453,42 @@ function classifySourceFile(relativePath: string): {
         : null,
     warnings,
   };
+}
+
+function isExcludedFromAnalysis(
+  relativePath: string,
+  manifest: StudyFrameImportManifest | null,
+): boolean {
+  if (manifest) {
+    return manifest.rawInputRules.excludeFromAnalysis.some((pattern) =>
+      matchesManifestPattern(relativePath, pattern),
+    );
+  }
+  return /^(?:_quiz_text|_docx_media_checks|_pdf_checks|study_app)\//i.test(
+    toPortablePath(relativePath),
+  );
+}
+
+function manifestRoleOverride(
+  relativePath: string,
+  manifest: StudyFrameImportManifest | null,
+): StudySourceDocument["role"] | null {
+  if (!manifest) return null;
+  for (const [pattern, role] of Object.entries(manifest.rawInputRules.roleOverrides)) {
+    if (matchesManifestPattern(relativePath, pattern) && isSourceDocumentRole(role)) return role;
+  }
+  return null;
+}
+
+function isSourceDocumentRole(value: string): value is StudySourceDocument["role"] {
+  return (
+    value === "quiz" ||
+    value === "solution" ||
+    value === "lecture" ||
+    value === "data_asset" ||
+    value === "generated_export" ||
+    value === "unknown"
+  );
 }
 
 function extractText(
@@ -451,6 +552,47 @@ function extractDocxText(
   });
 }
 
+function extractDocxAssets(
+  fs: FileSystem.FileSystem,
+  filePath: string,
+  relativePath: string,
+): Effect.Effect<EmbeddedDocxAsset[], StudyFrameImportFolderError> {
+  return Effect.gen(function* () {
+    const buffer = Buffer.from(
+      yield* fs
+        .readFile(filePath)
+        .pipe(mapFileSystemError(`DOCX content could not be read: ${filePath}`)),
+    );
+    return readZipEntries(buffer)
+      .filter(({ name }) => name.toLowerCase().startsWith("word/media/"))
+      .flatMap(({ name, content }): EmbeddedDocxAsset[] => {
+        const extension = pathExtname(name).toLowerCase();
+        const sourceAnchor = `${relativePath}#${name}`;
+        if (VECTOR_IMAGE_EXTENSIONS.has(extension)) {
+          return [
+            {
+              sourceAnchor,
+              localUri: null,
+              extractionConfidence: 0.25,
+              warning: `${sourceAnchor}: Vector DOCX asset (${extension.slice(1).toUpperCase()}) cannot be rendered yet; manual review is required.`,
+            },
+          ];
+        }
+        const mimeType = rasterImageMimeType(extension);
+        return mimeType
+          ? [
+              {
+                sourceAnchor,
+                localUri: `data:${mimeType};base64,${content.toString("base64")}`,
+                extractionConfidence: 0.9,
+                warning: null,
+              },
+            ]
+          : [];
+      });
+  });
+}
+
 function extractPdfText(
   fs: FileSystem.FileSystem,
   filePath: string,
@@ -475,13 +617,20 @@ function extractPdfText(
 }
 
 function readZipEntry(buffer: Buffer, entryName: string): Buffer | null {
+  return readZipEntries(buffer).find(({ name }) => name === entryName)?.content ?? null;
+}
+
+function readZipEntries(
+  buffer: Buffer,
+): Array<{ readonly name: string; readonly content: Buffer }> {
   const eocdOffset = findEndOfCentralDirectory(buffer);
-  if (eocdOffset < 0) return null;
+  if (eocdOffset < 0) return [];
   const entryCount = buffer.readUInt16LE(eocdOffset + 10);
   let cursor = buffer.readUInt32LE(eocdOffset + 16);
+  const entries: Array<{ readonly name: string; readonly content: Buffer }> = [];
 
   for (let index = 0; index < entryCount; index += 1) {
-    if (buffer.readUInt32LE(cursor) !== 0x02014b50) return null;
+    if (buffer.readUInt32LE(cursor) !== 0x02014b50) return [];
     const method = buffer.readUInt16LE(cursor + 10);
     const compressedSize = buffer.readUInt32LE(cursor + 20);
     const fileNameLength = buffer.readUInt16LE(cursor + 28);
@@ -490,20 +639,17 @@ function readZipEntry(buffer: Buffer, entryName: string): Buffer | null {
     const localHeaderOffset = buffer.readUInt32LE(cursor + 42);
     const fileName = buffer.toString("utf8", cursor + 46, cursor + 46 + fileNameLength);
 
-    if (fileName === entryName) {
-      const localNameLength = buffer.readUInt16LE(localHeaderOffset + 26);
-      const localExtraLength = buffer.readUInt16LE(localHeaderOffset + 28);
-      const dataStart = localHeaderOffset + 30 + localNameLength + localExtraLength;
-      const compressed = buffer.subarray(dataStart, dataStart + compressedSize);
-      if (method === 0) return compressed;
-      if (method === 8) return inflateRawSync(compressed);
-      return null;
-    }
+    const localNameLength = buffer.readUInt16LE(localHeaderOffset + 26);
+    const localExtraLength = buffer.readUInt16LE(localHeaderOffset + 28);
+    const dataStart = localHeaderOffset + 30 + localNameLength + localExtraLength;
+    const compressed = buffer.subarray(dataStart, dataStart + compressedSize);
+    if (method === 0) entries.push({ name: fileName, content: compressed });
+    if (method === 8) entries.push({ name: fileName, content: inflateRawSync(compressed) });
 
     cursor += 46 + fileNameLength + extraLength + commentLength;
   }
 
-  return null;
+  return entries;
 }
 
 function findEndOfCentralDirectory(buffer: Buffer): number {
@@ -569,10 +715,10 @@ function extractQuestionDrafts(text: string, relativePath: string): CandidateDra
   if (!normalized) return [];
 
   const markerPattern =
-    /(?:^|\n)\s*(?:(question|problem|exercise)\s+|q(?:uestion)?\.?\s*)(\d+[a-z]?)(?:\s*[:.)-]|\s+)/gi;
+    /(?:^|\n)\s*(?:(?:(question|problem|exercise)\s+|q(?:uestion)?\.?\s*)(\d+[a-z]?)(?:\s*[:.)-]|\s+)|(\d+)\s*[.)-]\s+)/gi;
   const markers = [...normalized.matchAll(markerPattern)].map((match) => ({
     index: match.index ?? 0,
-    label: `Q${match[2] ?? ""}`.trim(),
+    label: `Q${match[2] ?? match[3] ?? ""}`.trim(),
   }));
 
   if (markers.length === 0) {
@@ -811,6 +957,16 @@ function pathExtname(value: string): string {
   const base = pathBasename(value);
   const index = base.lastIndexOf(".");
   return index > 0 ? base.slice(index) : "";
+}
+
+function rasterImageMimeType(extension: string): string | null {
+  if (extension === ".png") return "image/png";
+  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  if (extension === ".gif") return "image/gif";
+  if (extension === ".webp") return "image/webp";
+  if (extension === ".bmp") return "image/bmp";
+  if (extension === ".tif" || extension === ".tiff") return "image/tiff";
+  return null;
 }
 
 function unique(values: readonly string[]): string[] {

@@ -5,6 +5,7 @@ import { resolvePrimaryEnvironmentHttpUrl } from "~/environments/primary";
 export async function importStudyFolder(input: {
   readonly projectId: string | null;
   readonly sourceRoot: string;
+  readonly manifestId?: string;
 }): Promise<StudyImportFolderResponse> {
   const response = await fetch(resolvePrimaryEnvironmentHttpUrl("/api/studyframe/import-folder"), {
     method: "POST",
@@ -12,6 +13,7 @@ export async function importStudyFolder(input: {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       ...(input.projectId ? { projectId: input.projectId } : {}),
+      ...(input.manifestId ? { manifestId: input.manifestId } : {}),
       sourceRoot: input.sourceRoot,
     }),
   });
