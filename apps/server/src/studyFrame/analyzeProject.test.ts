@@ -144,6 +144,15 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
                       supportConfidence: 0.9,
                     },
                   ],
+                  practiceItems: [
+                    {
+                      questionId: importedQuestionId,
+                      answerInputType: "numeric",
+                      answerOptions: [],
+                      tableColumns: [],
+                      plotChecklistItems: [],
+                    },
+                  ],
                 })) as TextGenerationShape["generateStructured"]),
             ),
           ),
@@ -160,9 +169,13 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
       assert.deepEqual(analyzed.snapshot.dataset.practiceSupport?.[0]?.expectedAnswerJson, [
         "4 Hz",
       ]);
+      assert.equal(analyzed.snapshot.dataset.practiceItems?.[0]?.answerInputType, "numeric");
       assert.equal(
         analyzed.snapshot.dataset.topicModules?.[0]?.generationMetadataJson?.promptVersion,
         "studyframe-analysis-v1",
+      );
+      assert.isDefined(
+        analyzed.snapshot.dataset.topicModules?.[0]?.generationMetadataJson?.rawStructuredResult,
       );
     }),
   );
