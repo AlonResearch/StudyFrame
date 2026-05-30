@@ -177,6 +177,7 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
                       answerOptions: [],
                       tableColumns: [],
                       plotChecklistItems: [],
+                      uploadAccept: null,
                     },
                   ],
                 });

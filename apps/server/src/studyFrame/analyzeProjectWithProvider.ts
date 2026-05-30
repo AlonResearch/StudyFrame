@@ -78,7 +78,7 @@ const ProviderPracticeItem = Schema.Struct({
   answerOptions: Schema.Array(Schema.String),
   tableColumns: Schema.Array(Schema.String),
   plotChecklistItems: Schema.Array(Schema.String),
-  uploadAccept: Schema.optionalKey(Schema.String),
+  uploadAccept: Schema.NullOr(Schema.String),
 });
 
 const ProviderAnalysisEnhancement = Schema.Struct({
@@ -107,12 +107,21 @@ export const analyzeProjectWithProvider = Effect.fn("StudyFrame.analyzeProjectWi
         modelSelection: provider.value.modelSelection,
       });
       const classified = applyProviderClassifications(local, classification);
-      const enhancement = yield* provider.value.textGeneration.generateStructured({
-        cwd: project.sourceRoot,
-        prompt: buildProviderAnalysisPrompt(classified),
-        outputSchema: ProviderAnalysisEnhancement,
-        modelSelection: provider.value.modelSelection,
-      });
+      const questionIds = classified.snapshot.dataset.questions
+        .filter((question) => question.projectId === project.id && question.isRealQuestion)
+        .map((question) => question.id);
+      const enhancements = yield* Effect.forEach(
+        chunks(questionIds, 12),
+        (batchQuestionIds) =>
+          provider.value.textGeneration.generateStructured({
+            cwd: project.sourceRoot,
+            prompt: buildProviderAnalysisPrompt(classified, new Set(batchQuestionIds)),
+            outputSchema: ProviderAnalysisEnhancement,
+            modelSelection: provider.value.modelSelection,
+          }),
+        { concurrency: 1 },
+      );
+      const enhancement = combineProviderEnhancements(enhancements);
       const generatedAt = DateTime.formatIso(yield* DateTime.now);
       return applyProviderEnhancement(
         classified,
@@ -169,13 +178,28 @@ function buildProviderClassificationPrompt(local: StudyAnalyzeProjectResponse): 
   ].join("\n\n");
 }
 
-function buildProviderAnalysisPrompt(local: StudyAnalyzeProjectResponse): string {
+function buildProviderAnalysisPrompt(
+  local: StudyAnalyzeProjectResponse,
+  requestedQuestionIds?: ReadonlySet<string>,
+): string {
   const dataset = local.snapshot.dataset;
   const projectId = local.result.projectId;
   const targetQuestionIds = new Set(
     dataset.questions
       .filter((question) => question.projectId === projectId && question.isRealQuestion)
+      .filter((question) => requestedQuestionIds?.has(question.id) ?? true)
       .map((question) => question.id),
+  );
+  const targetClusterIds = new Set(
+    dataset.questionTopics
+      .filter((topic) => targetQuestionIds.has(topic.questionId))
+      .map(
+        (topic) =>
+          (dataset.topicClusters ?? []).find(
+            (cluster) => cluster.projectId === projectId && cluster.displayName === topic.topic,
+          )?.id,
+      )
+      .filter((clusterId): clusterId is string => clusterId !== undefined),
   );
 
   return [
@@ -192,10 +216,10 @@ function buildProviderAnalysisPrompt(local: StudyAnalyzeProjectResponse): string
     JSON.stringify(
       {
         topicClusters: (dataset.topicClusters ?? []).filter(
-          (cluster) => cluster.projectId === projectId,
+          (cluster) => cluster.projectId === projectId && targetClusterIds.has(cluster.id),
         ),
         topicModules: (dataset.topicModules ?? []).filter(
-          (module) => module.projectId === projectId,
+          (module) => module.projectId === projectId && targetClusterIds.has(module.topicClusterId),
         ),
         questions: dataset.questions
           .filter((question) => targetQuestionIds.has(question.id))
@@ -212,6 +236,19 @@ function buildProviderAnalysisPrompt(local: StudyAnalyzeProjectResponse): string
       2,
     ),
   ].join("\n\n");
+}
+
+function combineProviderEnhancements(
+  enhancements: readonly ProviderAnalysisEnhancement[],
+): ProviderAnalysisEnhancement {
+  return {
+    topicModules: uniqueBy(
+      enhancements.flatMap((enhancement) => enhancement.topicModules),
+      (module) => module.topicClusterId,
+    ),
+    questionSupport: enhancements.flatMap((enhancement) => enhancement.questionSupport),
+    practiceItems: enhancements.flatMap((enhancement) => enhancement.practiceItems),
+  };
 }
 
 function applyProviderClassifications(
@@ -849,6 +886,16 @@ function priorityLabel(priorityScore: number): StudyTopicCluster["priorityLabel"
 
 function unique(values: readonly string[]): string[] {
   return [...new Set(values)];
+}
+
+function uniqueBy<A>(values: readonly A[], key: (value: A) => string): A[] {
+  return [...new Map(values.map((value) => [key(value), value])).values()];
+}
+
+function chunks<A>(values: readonly A[], size: number): A[][] {
+  return Array.from({ length: Math.ceil(values.length / size) }, (_, index) =>
+    values.slice(index * size, (index + 1) * size),
+  );
 }
 
 function normalizePrompt(value: string): string {
