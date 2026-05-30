@@ -41,6 +41,14 @@ describe("study import/export", () => {
     expect(dataset.questions.every((question) => question.isRealQuestion)).toBe(true);
     expect(dataset.topicThreads).toHaveLength(1);
     expect(dataset.questionSupport[0]?.rubric[0]?.label).toBe("Uses boundary condition");
+    expect(dataset.sourceDocuments).toHaveLength(1);
+    expect(dataset.questionCandidates).toHaveLength(2);
+    expect(dataset.topicClusters?.[0]?.displayName).toBe("Waves");
+    expect(dataset.topicModules).toHaveLength(1);
+    expect(dataset.practiceItems?.every((item) => item.itemOrigin === "real_question")).toBe(true);
+    expect(dataset.practiceSupport?.[0]?.rubricJson).toEqual([
+      { label: "Uses boundary condition", points: 4, keywords: ["boundary"] },
+    ]);
   });
 
   it("exports priority and score reports as markdown", () => {

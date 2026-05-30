@@ -161,12 +161,15 @@ export function StudyWorkspace() {
           <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-4 sm:px-6">
             <ProjectDashboard
               projectSummary={projectSummary}
+              sourceDocumentCount={dataset.sourceDocuments?.length ?? dataset.documents.length}
+              questionCandidateCount={dataset.questionCandidates?.length ?? 0}
               realQuestionCount={
                 dataset.questions.filter((question) => question.isRealQuestion).length
               }
               generatedQuestionCount={
                 dataset.questions.filter((question) => !question.isRealQuestion).length
               }
+              topicClusterCount={dataset.topicClusters?.length ?? dataset.topicThreads.length}
               dueTopicCount={
                 dataset.topicThreads.filter(
                   (thread) => getUnattemptedRealQuestions(dataset, attempts, thread.id).length > 0,
@@ -327,19 +330,30 @@ function StudyHeader({ projectName }: { projectName: string }) {
 
 function ProjectDashboard({
   projectSummary,
+  sourceDocumentCount,
+  questionCandidateCount,
   realQuestionCount,
   generatedQuestionCount,
+  topicClusterCount,
   dueTopicCount,
   warningCount,
 }: {
   readonly projectSummary: StudyCompletionSummary;
+  readonly sourceDocumentCount: number;
+  readonly questionCandidateCount: number;
   readonly realQuestionCount: number;
   readonly generatedQuestionCount: number;
+  readonly topicClusterCount: number;
   readonly dueTopicCount: number;
   readonly warningCount: number;
 }) {
   return (
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
+      <MetricTile
+        label="Imported files"
+        value={sourceDocumentCount}
+        detail={`${questionCandidateCount} candidates`}
+      />
       <MetricTile
         label="Real questions"
         value={realQuestionCount}
@@ -351,6 +365,7 @@ function ProjectDashboard({
         detail="weighted by detected points"
       />
       <MetricTile label="Generated" value={generatedQuestionCount} detail="separate score pool" />
+      <MetricTile label="Topic clusters" value={topicClusterCount} detail="analysis output" />
       <MetricTile label="Due topics" value={dueTopicCount} detail="real questions first" />
       <MetricTile label="Warnings" value={warningCount} detail="extraction review" />
     </section>

@@ -8,6 +8,7 @@ import type {
   StudyRubricItem,
   StudyTopicThread,
 } from "./studyTypes";
+import { withDerivedStudyDomainModel } from "./studyDomainModel";
 
 export interface StudyImportPayload {
   readonly project?: {
@@ -49,7 +50,7 @@ export function parseStudyImportJson(rawJson: string, now: string): StudyDataset
 
 export function normalizeStudyImportPayload(input: unknown, now: string): StudyDataset {
   if (isStudyDataset(input)) {
-    return input;
+    return withDerivedStudyDomainModel(input);
   }
 
   if (!isRecord(input)) {
@@ -186,14 +187,14 @@ export function normalizeStudyImportPayload(input: unknown, now: string): StudyD
     };
   });
 
-  return {
+  return withDerivedStudyDomainModel({
     projects: [project],
     documents,
     questions,
     questionSupport,
     questionTopics,
     topicThreads,
-  };
+  });
 }
 
 function normalizeDocuments(input: unknown, projectId: string): StudyDocument[] {

@@ -1,8 +1,9 @@
 import type { StudyDataset } from "./studyTypes";
+import { withDerivedStudyDomainModel } from "./studyDomainModel";
 
 const importedAt = "2026-05-29T20:00:00.000Z";
 
-export const studySeedData: StudyDataset = {
+export const studySeedData: StudyDataset = withDerivedStudyDomainModel({
   projects: [
     {
       id: "signal-data-analysis",
@@ -531,4 +532,4 @@ export const studySeedData: StudyDataset = {
       generatedAt: importedAt,
     },
   ],
-};
+});

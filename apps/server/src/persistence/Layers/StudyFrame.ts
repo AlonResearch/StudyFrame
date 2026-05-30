@@ -3,10 +3,18 @@ import type {
   StudyCompletionSummary,
   StudyFrameSnapshot,
   StudyGeneratedQuestionBatch,
+  StudyPracticeItem,
+  StudyPracticeSupport,
   StudyProject,
   StudyQuestion,
+  StudyQuestionCandidate,
+  StudyQuestionClassification,
   StudyQuestionSupport,
   StudyQuestionTopic,
+  StudySourceAsset,
+  StudySourceDocument,
+  StudyTopicCluster,
+  StudyTopicModule,
   StudyTopicThread,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -33,6 +41,43 @@ type StudyDocumentRow = {
   readonly sourcePath: string;
   readonly year: number | null;
   readonly quizLabel: string;
+};
+
+type StudySourceDocumentRow = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly sourcePath: string;
+  readonly fileType: StudySourceDocument["fileType"];
+  readonly role: StudySourceDocument["role"];
+  readonly year: number | null;
+  readonly quizLabel: string | null;
+  readonly extractionConfidence: number;
+  readonly warnings: string;
+};
+
+type StudySourceAssetRow = {
+  readonly id: string;
+  readonly documentId: string;
+  readonly kind: StudySourceAsset["kind"];
+  readonly sourceAnchor: string;
+  readonly contentText: string | null;
+  readonly contentJson: string;
+  readonly localUri: string | null;
+  readonly extractionConfidence: number;
+};
+
+type StudyQuestionCandidateRow = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly documentId: string;
+  readonly sourceAnchor: string;
+  readonly rawPromptMarkdown: string;
+  readonly sourceYear: number | null;
+  readonly sourceQuizLabel: string | null;
+  readonly pointValue: number | null;
+  readonly assetIds: string;
+  readonly extractionConfidence: number;
+  readonly needsManualReview: number;
 };
 
 type StudyTopicThreadRow = {
@@ -86,6 +131,65 @@ type StudyQuestionTopicRow = {
   readonly subtype: string;
   readonly confidence: number;
   readonly isPrimary: number;
+};
+
+type StudyTopicClusterRow = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly displayName: string;
+  readonly priorityRank: number;
+  readonly priorityScore: number;
+  readonly priorityLabel: StudyTopicCluster["priorityLabel"];
+  readonly priorityRationale: string;
+  readonly recentQuestionParts: number;
+  readonly olderQuestionAppearances: number;
+  readonly weightedPoints: number;
+  readonly subtypes: string;
+};
+
+type StudyQuestionClassificationRow = {
+  readonly id: string;
+  readonly questionCandidateId: string;
+  readonly topicClusterId: string;
+  readonly subtype: string;
+  readonly confidence: number;
+  readonly isPrimary: number;
+};
+
+type StudyTopicModuleRow = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly topicClusterId: string;
+  readonly theorySummaryMarkdown: string;
+  readonly formulaSheetMarkdown: string;
+  readonly commonTrapsMarkdown: string;
+  readonly subtypeCoverageJson: string;
+  readonly firstExposureComplete: number;
+};
+
+type StudyPracticeItemRow = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly topicModuleId: string;
+  readonly sourceQuestionCandidateId: string | null;
+  readonly itemOrigin: StudyPracticeItem["itemOrigin"];
+  readonly subtype: string;
+  readonly promptMarkdown: string;
+  readonly answerInputType: StudyPracticeItem["answerInputType"];
+  readonly pointValue: number;
+  readonly assetIds: string;
+  readonly sourceMetadataJson: string;
+};
+
+type StudyPracticeSupportRow = {
+  readonly id: string;
+  readonly practiceItemId: string;
+  readonly expectedAnswerJson: string;
+  readonly rubricJson: string;
+  readonly hintsJson: string;
+  readonly stepByStepSolutionMarkdown: string;
+  readonly commonMistakesMarkdown: string;
+  readonly supportConfidence: number;
 };
 
 type StudyAttemptRow = {
@@ -178,6 +282,49 @@ const makeStudyFrameRepository = Effect.gen(function* () {
         FROM study_documents
         ORDER BY year DESC, id ASC
       `;
+      const sourceDocumentRows = yield* sql<StudySourceDocumentRow>`
+        SELECT
+          id AS "id",
+          project_id AS "projectId",
+          source_path AS "sourcePath",
+          file_type AS "fileType",
+          role AS "role",
+          year AS "year",
+          quiz_label AS "quizLabel",
+          extraction_confidence AS "extractionConfidence",
+          warnings_json AS "warnings"
+        FROM study_source_documents
+        ORDER BY year DESC, source_path ASC, id ASC
+      `;
+      const sourceAssetRows = yield* sql<StudySourceAssetRow>`
+        SELECT
+          id AS "id",
+          document_id AS "documentId",
+          kind AS "kind",
+          source_anchor AS "sourceAnchor",
+          content_text AS "contentText",
+          content_json AS "contentJson",
+          local_uri AS "localUri",
+          extraction_confidence AS "extractionConfidence"
+        FROM study_source_assets
+        ORDER BY document_id ASC, source_anchor ASC, id ASC
+      `;
+      const questionCandidateRows = yield* sql<StudyQuestionCandidateRow>`
+        SELECT
+          id AS "id",
+          project_id AS "projectId",
+          document_id AS "documentId",
+          source_anchor AS "sourceAnchor",
+          raw_prompt_markdown AS "rawPromptMarkdown",
+          source_year AS "sourceYear",
+          source_quiz_label AS "sourceQuizLabel",
+          point_value AS "pointValue",
+          asset_ids_json AS "assetIds",
+          extraction_confidence AS "extractionConfidence",
+          needs_manual_review AS "needsManualReview"
+        FROM study_question_candidates
+        ORDER BY source_year DESC, id ASC
+      `;
       const topicThreadRows = yield* sql<StudyTopicThreadRow>`
         SELECT
           id AS "id",
@@ -238,6 +385,75 @@ const makeStudyFrameRepository = Effect.gen(function* () {
           is_primary AS "isPrimary"
         FROM question_topics
         ORDER BY topic_thread_id ASC, subtype ASC, question_id ASC
+      `;
+      const topicClusterRows = yield* sql<StudyTopicClusterRow>`
+        SELECT
+          id AS "id",
+          project_id AS "projectId",
+          display_name AS "displayName",
+          priority_rank AS "priorityRank",
+          priority_score AS "priorityScore",
+          priority_label AS "priorityLabel",
+          priority_rationale AS "priorityRationale",
+          recent_question_parts AS "recentQuestionParts",
+          older_question_appearances AS "olderQuestionAppearances",
+          weighted_points AS "weightedPoints",
+          subtypes_json AS "subtypes"
+        FROM study_topic_clusters
+        ORDER BY priority_rank ASC, display_name ASC
+      `;
+      const classificationRows = yield* sql<StudyQuestionClassificationRow>`
+        SELECT
+          id AS "id",
+          question_candidate_id AS "questionCandidateId",
+          topic_cluster_id AS "topicClusterId",
+          subtype AS "subtype",
+          confidence AS "confidence",
+          is_primary AS "isPrimary"
+        FROM study_question_classifications
+        ORDER BY topic_cluster_id ASC, subtype ASC, question_candidate_id ASC
+      `;
+      const topicModuleRows = yield* sql<StudyTopicModuleRow>`
+        SELECT
+          id AS "id",
+          project_id AS "projectId",
+          topic_cluster_id AS "topicClusterId",
+          theory_summary_markdown AS "theorySummaryMarkdown",
+          formula_sheet_markdown AS "formulaSheetMarkdown",
+          common_traps_markdown AS "commonTrapsMarkdown",
+          subtype_coverage_json AS "subtypeCoverageJson",
+          first_exposure_complete AS "firstExposureComplete"
+        FROM study_topic_modules
+        ORDER BY id ASC
+      `;
+      const practiceItemRows = yield* sql<StudyPracticeItemRow>`
+        SELECT
+          id AS "id",
+          project_id AS "projectId",
+          topic_module_id AS "topicModuleId",
+          source_question_candidate_id AS "sourceQuestionCandidateId",
+          item_origin AS "itemOrigin",
+          subtype AS "subtype",
+          prompt_markdown AS "promptMarkdown",
+          answer_input_type AS "answerInputType",
+          point_value AS "pointValue",
+          asset_ids_json AS "assetIds",
+          source_metadata_json AS "sourceMetadataJson"
+        FROM study_practice_items
+        ORDER BY topic_module_id ASC, item_origin DESC, id ASC
+      `;
+      const practiceSupportRows = yield* sql<StudyPracticeSupportRow>`
+        SELECT
+          id AS "id",
+          practice_item_id AS "practiceItemId",
+          expected_answer_json AS "expectedAnswerJson",
+          rubric_json AS "rubricJson",
+          hints_json AS "hintsJson",
+          step_by_step_solution_markdown AS "stepByStepSolutionMarkdown",
+          common_mistakes_markdown AS "commonMistakesMarkdown",
+          support_confidence AS "supportConfidence"
+        FROM study_practice_support
+        ORDER BY practice_item_id ASC, id ASC
       `;
       const attemptRows = yield* sql<StudyAttemptRow>`
         SELECT
@@ -300,6 +516,46 @@ const makeStudyFrameRepository = Effect.gen(function* () {
             }),
           ),
           documents: documentRows,
+          sourceDocuments: sourceDocumentRows.map(
+            (row): StudySourceDocument => ({
+              id: row.id,
+              projectId: row.projectId,
+              sourcePath: row.sourcePath,
+              fileType: row.fileType,
+              role: row.role,
+              year: row.year,
+              quizLabel: row.quizLabel,
+              extractionConfidence: row.extractionConfidence,
+              warnings: parseJson(row.warnings, [] as string[]),
+            }),
+          ),
+          sourceAssets: sourceAssetRows.map(
+            (row): StudySourceAsset => ({
+              id: row.id,
+              documentId: row.documentId,
+              kind: row.kind,
+              sourceAnchor: row.sourceAnchor,
+              contentText: row.contentText,
+              contentJson: parseJson(row.contentJson, null as unknown),
+              localUri: row.localUri,
+              extractionConfidence: row.extractionConfidence,
+            }),
+          ),
+          questionCandidates: questionCandidateRows.map(
+            (row): StudyQuestionCandidate => ({
+              id: row.id,
+              projectId: row.projectId,
+              documentId: row.documentId,
+              sourceAnchor: row.sourceAnchor,
+              rawPromptMarkdown: row.rawPromptMarkdown,
+              sourceYear: row.sourceYear,
+              sourceQuizLabel: row.sourceQuizLabel,
+              pointValue: row.pointValue,
+              assetIds: parseJson(row.assetIds, [] as string[]),
+              extractionConfidence: row.extractionConfidence,
+              needsManualReview: toBoolean(row.needsManualReview),
+            }),
+          ),
           questions: questionRows.map(
             (row): StudyQuestion => ({
               id: row.id,
@@ -355,6 +611,70 @@ const makeStudyFrameRepository = Effect.gen(function* () {
               status: row.status,
               createdAt: row.createdAt,
               updatedAt: row.updatedAt,
+            }),
+          ),
+          topicClusters: topicClusterRows.map(
+            (row): StudyTopicCluster => ({
+              id: row.id,
+              projectId: row.projectId,
+              displayName: row.displayName,
+              priorityRank: row.priorityRank,
+              priorityScore: row.priorityScore,
+              priorityLabel: row.priorityLabel,
+              priorityRationale: row.priorityRationale,
+              recentQuestionParts: row.recentQuestionParts,
+              olderQuestionAppearances: row.olderQuestionAppearances,
+              weightedPoints: row.weightedPoints,
+              subtypes: parseJson(row.subtypes, [] as string[]),
+            }),
+          ),
+          questionClassifications: classificationRows.map(
+            (row): StudyQuestionClassification => ({
+              id: row.id,
+              questionCandidateId: row.questionCandidateId,
+              topicClusterId: row.topicClusterId,
+              subtype: row.subtype,
+              confidence: row.confidence,
+              isPrimary: toBoolean(row.isPrimary),
+            }),
+          ),
+          topicModules: topicModuleRows.map(
+            (row): StudyTopicModule => ({
+              id: row.id,
+              projectId: row.projectId,
+              topicClusterId: row.topicClusterId,
+              theorySummaryMarkdown: row.theorySummaryMarkdown,
+              formulaSheetMarkdown: row.formulaSheetMarkdown,
+              commonTrapsMarkdown: row.commonTrapsMarkdown,
+              subtypeCoverageJson: parseJson(row.subtypeCoverageJson, null as unknown),
+              firstExposureComplete: toBoolean(row.firstExposureComplete),
+            }),
+          ),
+          practiceItems: practiceItemRows.map(
+            (row): StudyPracticeItem => ({
+              id: row.id,
+              projectId: row.projectId,
+              topicModuleId: row.topicModuleId,
+              sourceQuestionCandidateId: row.sourceQuestionCandidateId,
+              itemOrigin: row.itemOrigin,
+              subtype: row.subtype,
+              promptMarkdown: row.promptMarkdown,
+              answerInputType: row.answerInputType,
+              pointValue: row.pointValue,
+              assetIds: parseJson(row.assetIds, [] as string[]),
+              sourceMetadataJson: parseJson(row.sourceMetadataJson, null as unknown),
+            }),
+          ),
+          practiceSupport: practiceSupportRows.map(
+            (row): StudyPracticeSupport => ({
+              id: row.id,
+              practiceItemId: row.practiceItemId,
+              expectedAnswerJson: parseJson(row.expectedAnswerJson, null as unknown),
+              rubricJson: parseJson(row.rubricJson, null as unknown),
+              hintsJson: parseJson(row.hintsJson, [] as string[]),
+              stepByStepSolutionMarkdown: row.stepByStepSolutionMarkdown,
+              commonMistakesMarkdown: row.commonMistakesMarkdown,
+              supportConfidence: row.supportConfidence,
             }),
           ),
         },
@@ -431,6 +751,14 @@ const makeStudyFrameRepository = Effect.gen(function* () {
           yield* sql`DELETE FROM generated_question_batches`;
           yield* sql`DELETE FROM completion_summaries`;
           yield* sql`DELETE FROM attempts`;
+          yield* sql`DELETE FROM study_practice_support`;
+          yield* sql`DELETE FROM study_practice_items`;
+          yield* sql`DELETE FROM study_topic_modules`;
+          yield* sql`DELETE FROM study_question_classifications`;
+          yield* sql`DELETE FROM study_topic_clusters`;
+          yield* sql`DELETE FROM study_question_candidates`;
+          yield* sql`DELETE FROM study_source_assets`;
+          yield* sql`DELETE FROM study_source_documents`;
           yield* sql`DELETE FROM question_support`;
           yield* sql`DELETE FROM question_topics`;
           yield* sql`DELETE FROM questions`;
@@ -474,6 +802,89 @@ const makeStudyFrameRepository = Effect.gen(function* () {
                 ${document.sourcePath},
                 ${document.year},
                 ${document.quizLabel}
+              )
+            `;
+          }
+
+          for (const document of snapshot.dataset.sourceDocuments ?? []) {
+            yield* sql`
+              INSERT INTO study_source_documents (
+                id,
+                project_id,
+                source_path,
+                file_type,
+                role,
+                year,
+                quiz_label,
+                extraction_confidence,
+                warnings_json
+              )
+              VALUES (
+                ${document.id},
+                ${document.projectId},
+                ${document.sourcePath},
+                ${document.fileType},
+                ${document.role},
+                ${document.year},
+                ${document.quizLabel},
+                ${document.extractionConfidence},
+                ${toJson(document.warnings)}
+              )
+            `;
+          }
+
+          for (const asset of snapshot.dataset.sourceAssets ?? []) {
+            yield* sql`
+              INSERT INTO study_source_assets (
+                id,
+                document_id,
+                kind,
+                source_anchor,
+                content_text,
+                content_json,
+                local_uri,
+                extraction_confidence
+              )
+              VALUES (
+                ${asset.id},
+                ${asset.documentId},
+                ${asset.kind},
+                ${asset.sourceAnchor},
+                ${asset.contentText},
+                ${toJson(asset.contentJson)},
+                ${asset.localUri},
+                ${asset.extractionConfidence}
+              )
+            `;
+          }
+
+          for (const candidate of snapshot.dataset.questionCandidates ?? []) {
+            yield* sql`
+              INSERT INTO study_question_candidates (
+                id,
+                project_id,
+                document_id,
+                source_anchor,
+                raw_prompt_markdown,
+                source_year,
+                source_quiz_label,
+                point_value,
+                asset_ids_json,
+                extraction_confidence,
+                needs_manual_review
+              )
+              VALUES (
+                ${candidate.id},
+                ${candidate.projectId},
+                ${candidate.documentId},
+                ${candidate.sourceAnchor},
+                ${candidate.rawPromptMarkdown},
+                ${candidate.sourceYear},
+                ${candidate.sourceQuizLabel},
+                ${candidate.pointValue},
+                ${toJson(candidate.assetIds)},
+                ${candidate.extractionConfidence},
+                ${fromBoolean(candidate.needsManualReview)}
               )
             `;
           }
@@ -592,6 +1003,139 @@ const makeStudyFrameRepository = Effect.gen(function* () {
                 ${topic.subtype},
                 ${topic.confidence},
                 ${fromBoolean(topic.isPrimary)}
+              )
+            `;
+          }
+
+          for (const cluster of snapshot.dataset.topicClusters ?? []) {
+            yield* sql`
+              INSERT INTO study_topic_clusters (
+                id,
+                project_id,
+                display_name,
+                priority_rank,
+                priority_score,
+                priority_label,
+                priority_rationale,
+                recent_question_parts,
+                older_question_appearances,
+                weighted_points,
+                subtypes_json
+              )
+              VALUES (
+                ${cluster.id},
+                ${cluster.projectId},
+                ${cluster.displayName},
+                ${cluster.priorityRank},
+                ${cluster.priorityScore},
+                ${cluster.priorityLabel},
+                ${cluster.priorityRationale},
+                ${cluster.recentQuestionParts},
+                ${cluster.olderQuestionAppearances},
+                ${cluster.weightedPoints},
+                ${toJson(cluster.subtypes)}
+              )
+            `;
+          }
+
+          for (const classification of snapshot.dataset.questionClassifications ?? []) {
+            yield* sql`
+              INSERT INTO study_question_classifications (
+                id,
+                question_candidate_id,
+                topic_cluster_id,
+                subtype,
+                confidence,
+                is_primary
+              )
+              VALUES (
+                ${classification.id},
+                ${classification.questionCandidateId},
+                ${classification.topicClusterId},
+                ${classification.subtype},
+                ${classification.confidence},
+                ${fromBoolean(classification.isPrimary)}
+              )
+            `;
+          }
+
+          for (const module of snapshot.dataset.topicModules ?? []) {
+            yield* sql`
+              INSERT INTO study_topic_modules (
+                id,
+                project_id,
+                topic_cluster_id,
+                theory_summary_markdown,
+                formula_sheet_markdown,
+                common_traps_markdown,
+                subtype_coverage_json,
+                first_exposure_complete
+              )
+              VALUES (
+                ${module.id},
+                ${module.projectId},
+                ${module.topicClusterId},
+                ${module.theorySummaryMarkdown},
+                ${module.formulaSheetMarkdown},
+                ${module.commonTrapsMarkdown},
+                ${toJson(module.subtypeCoverageJson)},
+                ${fromBoolean(module.firstExposureComplete)}
+              )
+            `;
+          }
+
+          for (const item of snapshot.dataset.practiceItems ?? []) {
+            yield* sql`
+              INSERT INTO study_practice_items (
+                id,
+                project_id,
+                topic_module_id,
+                source_question_candidate_id,
+                item_origin,
+                subtype,
+                prompt_markdown,
+                answer_input_type,
+                point_value,
+                asset_ids_json,
+                source_metadata_json
+              )
+              VALUES (
+                ${item.id},
+                ${item.projectId},
+                ${item.topicModuleId},
+                ${item.sourceQuestionCandidateId},
+                ${item.itemOrigin},
+                ${item.subtype},
+                ${item.promptMarkdown},
+                ${item.answerInputType},
+                ${item.pointValue},
+                ${toJson(item.assetIds)},
+                ${toJson(item.sourceMetadataJson)}
+              )
+            `;
+          }
+
+          for (const support of snapshot.dataset.practiceSupport ?? []) {
+            yield* sql`
+              INSERT INTO study_practice_support (
+                id,
+                practice_item_id,
+                expected_answer_json,
+                rubric_json,
+                hints_json,
+                step_by_step_solution_markdown,
+                common_mistakes_markdown,
+                support_confidence
+              )
+              VALUES (
+                ${support.id},
+                ${support.practiceItemId},
+                ${toJson(support.expectedAnswerJson)},
+                ${toJson(support.rubricJson)},
+                ${toJson(support.hintsJson)},
+                ${support.stepByStepSolutionMarkdown},
+                ${support.commonMistakesMarkdown},
+                ${support.supportConfidence}
               )
             `;
           }

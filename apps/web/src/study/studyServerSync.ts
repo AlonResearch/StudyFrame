@@ -1,6 +1,7 @@
 import type { StudyFrameSnapshot, StudyFrameSnapshotResponse } from "@t3tools/contracts";
 
 import { resolvePrimaryEnvironmentHttpUrl } from "~/environments/primary";
+import { withDerivedStudyDomainModel } from "./studyDomainModel";
 import { getNextRealQuestion } from "./studyLogic";
 import { useStudyFrameStore, type StudyFrameStoreState } from "./studyStore";
 
@@ -10,7 +11,7 @@ let lastSavedJson = "";
 
 function makeSnapshot(state: StudyFrameStoreState): StudyFrameSnapshot {
   return {
-    dataset: state.dataset,
+    dataset: withDerivedStudyDomainModel(state.dataset),
     attempts: state.attempts,
     completionSummaries: state.completionSummaries,
     generatedQuestionBatches: state.generatedQuestionBatches,
@@ -27,22 +28,22 @@ function initialSelectedTopicThreadId(snapshot: StudyFrameSnapshot) {
 
 function applyServerSnapshot(snapshot: StudyFrameSnapshot) {
   const current = useStudyFrameStore.getState();
+  const dataset = withDerivedStudyDomainModel(snapshot.dataset);
   const selectedProjectId =
-    snapshot.dataset.projects.find((project) => project.id === current.selectedProjectId)?.id ??
-    snapshot.dataset.projects[0]?.id ??
+    dataset.projects.find((project) => project.id === current.selectedProjectId)?.id ??
+    dataset.projects[0]?.id ??
     "";
   const selectedTopicThreadId =
-    snapshot.dataset.topicThreads.find((thread) => thread.id === current.selectedTopicThreadId)
-      ?.id ?? initialSelectedTopicThreadId(snapshot);
+    dataset.topicThreads.find((thread) => thread.id === current.selectedTopicThreadId)?.id ??
+    initialSelectedTopicThreadId({ ...snapshot, dataset });
   const activeQuestionId =
-    snapshot.dataset.questions.find((question) => question.id === current.activeQuestionId)?.id ??
+    dataset.questions.find((question) => question.id === current.activeQuestionId)?.id ??
     (selectedTopicThreadId
-      ? (getNextRealQuestion(snapshot.dataset, snapshot.attempts, selectedTopicThreadId)?.id ??
-        null)
+      ? (getNextRealQuestion(dataset, snapshot.attempts, selectedTopicThreadId)?.id ?? null)
       : null);
 
   useStudyFrameStore.setState({
-    dataset: snapshot.dataset,
+    dataset,
     attempts: snapshot.attempts,
     completionSummaries: snapshot.completionSummaries,
     generatedQuestionBatches: snapshot.generatedQuestionBatches,

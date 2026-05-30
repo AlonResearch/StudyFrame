@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { randomUUID } from "~/lib/utils";
+import { withDerivedStudyDomainModel } from "./studyDomainModel";
 import {
   checkDirection,
   createCompletionSummary,
@@ -392,13 +393,14 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
       },
 
       replaceDataset: (dataset) => {
-        const selectedProjectId = dataset.projects[0]?.id ?? "";
-        const selectedTopicThreadId = initialSelectedTopicThreadId(dataset);
+        const normalizedDataset = withDerivedStudyDomainModel(dataset);
+        const selectedProjectId = normalizedDataset.projects[0]?.id ?? "";
+        const selectedTopicThreadId = initialSelectedTopicThreadId(normalizedDataset);
         const activeQuestionId = selectedTopicThreadId
-          ? (getNextRealQuestion(dataset, [], selectedTopicThreadId)?.id ?? null)
+          ? (getNextRealQuestion(normalizedDataset, [], selectedTopicThreadId)?.id ?? null)
           : null;
         set({
-          dataset,
+          dataset: normalizedDataset,
           attempts: [],
           completionSummaries: [],
           generatedQuestionBatches: [],
@@ -438,7 +440,7 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
       name: STORAGE_KEY,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        dataset: state.dataset,
+        dataset: withDerivedStudyDomainModel(state.dataset),
         attempts: state.attempts,
         completionSummaries: state.completionSummaries,
         generatedQuestionBatches: state.generatedQuestionBatches,
@@ -452,6 +454,14 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
         solutionOpenQuestionIds: state.solutionOpenQuestionIds,
         reviewModeTopicThreadId: state.reviewModeTopicThreadId,
       }),
+      merge: (persisted, current) => {
+        const persistedState = persisted as Partial<StudyFrameStoreState>;
+        const merged = { ...current, ...persistedState };
+        return {
+          ...merged,
+          dataset: withDerivedStudyDomainModel(merged.dataset),
+        };
+      },
     },
   ),
 );
