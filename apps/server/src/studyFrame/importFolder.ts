@@ -112,6 +112,12 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
   const projectName = path.basename(sourceRoot) || "Imported course";
   const projectId = input.projectId ?? `project-${stableSlug(projectName) || "imported-course"}`;
   const files = yield* scanFiles({ fs, path, sourceRoot });
+  const orderedFiles = files.toSorted(
+    (left, right) =>
+      Number(isExtractedTextMirror(left.relativePath)) -
+        Number(isExtractedTextMirror(right.relativePath)) ||
+      left.relativePath.localeCompare(right.relativePath),
+  );
   const sourceDocuments: StudySourceDocument[] = [];
   const sourceAssets: StudySourceAsset[] = [];
   const questionCandidates: StudyQuestionCandidate[] = [];
@@ -119,8 +125,9 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
   const questionSupport: StudyQuestionSupport[] = [];
   const questionTopics: StudyQuestionTopic[] = [];
   const warnings: string[] = [];
+  const originalQuestionFingerprints = new Set<string>();
 
-  for (const file of files) {
+  for (const file of orderedFiles) {
     const classification = classifySourceFile(file.relativePath);
     const year = extractYear(file.relativePath);
     const quizLabel = makeQuizLabel(file.relativePath, year);
@@ -168,6 +175,16 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
 
     const candidateDrafts = extractQuestionDrafts(extraction.text, file.relativePath);
     for (const [index, draft] of candidateDrafts.entries()) {
+      const fingerprint = normalizePrompt(draft.rawPromptMarkdown);
+      if (
+        isExtractedTextMirror(file.relativePath) &&
+        originalQuestionFingerprints.has(fingerprint)
+      ) {
+        continue;
+      }
+      if (!isExtractedTextMirror(file.relativePath)) {
+        originalQuestionFingerprints.add(fingerprint);
+      }
       const candidateId = `candidate-${stableSlug(`${file.relativePath}-${draft.label}-${index + 1}`) || stableHash(`${file.relativePath}-${index}`)}`;
       const questionId = `q-${stableSlug(`${file.relativePath}-${draft.label}-${index + 1}`) || stableHash(candidateId)}`;
       const needsManualReview = extraction.confidence < 0.8 || documentWarnings.length > 0;
@@ -343,9 +360,11 @@ function classifySourceFile(relativePath: string): {
   const generatedExport = isGeneratedMarkdownExport(relativePath);
   const role: StudySourceDocument["role"] = generatedExport
     ? "generated_export"
-    : /solution|answer|rubric|official[_ -]?key/.test(normalized)
+    : /(?:^|[/_. -])(?:ans|answers?|solutions?|rubric|official[_ -]?key)(?:[/_. -]|$)/.test(
+          normalized,
+        )
       ? "solution"
-      : /lecture|slides|notes/.test(normalized)
+      : /lecture|slides|notes|alllec/.test(normalized)
         ? "lecture"
         : DATA_EXTENSIONS.has(extension) || IMAGE_EXTENSIONS.has(extension)
           ? "data_asset"
@@ -740,8 +759,14 @@ function isGeneratedMarkdownExport(relativePath: string): boolean {
     name.includes("final_report") ||
     name.includes("mistakes_review") ||
     name.includes("score_summary") ||
-    name.includes("review_material")
+    name.includes("review_material") ||
+    name.includes("study_summary") ||
+    name.includes("revised-plan")
   );
+}
+
+function isExtractedTextMirror(relativePath: string): boolean {
+  return toPortablePath(relativePath).toLowerCase().startsWith("_quiz_text/");
 }
 
 function makeQuizLabel(relativePath: string, year: number | null): string | null {
