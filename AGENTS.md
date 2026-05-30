@@ -1,54 +1,80 @@
 # AGENTS.md
 
+## Product Contract
+
+Read `README.md` before changing behavior or UX. StudyFrame is a desktop study workspace, not a coding-agent product.
+
+The primary workflow is:
+
+```text
+course folder -> extraction -> topic priority -> brief concept refresher
+ -> real-question PBL practice -> spaced review -> optional generated variants
+```
+
+Preserve these invariants:
+
+- Real extracted questions come before generated variants.
+- Generated variants unlock only after real questions in scope are attempted.
+- Before submit or reveal, never leak expected answers, rubric keywords, solution steps, or answer-revealing traps.
+- Topic ordering adapts like a spaced-repetition queue using source priority, performance, and review timing.
+- Questions retain source grounding and warnings for unclear images, tables, equations, or layouts.
+- Keep the main UX focused on studying. Avoid chat-first, coding-agent, or internal-analysis surfaces.
+
 ## Task Completion Requirements
 
-- All of `bun fmt`, `bun lint`, and `bun typecheck` must pass before considering tasks completed.
-  - If changing native mobile code, `bun lint:mobile` must also pass.
-- NEVER run `bun test`. Always use `bun run test` (runs Vitest).
-
-## Project Snapshot
-
-T3 Code is a minimal web GUI for using coding agents like Codex and Claude.
-
-This repository is a VERY EARLY WIP. Proposing sweeping changes that improve long-term maintainability is encouraged.
-
-## Core Priorities
-
-1. Performance first.
-2. Reliability first.
-3. Keep behavior predictable under load and during failures (session restarts, reconnects, partial streams).
-
-If a tradeoff is required, choose correctness and robustness over short-term convenience.
-
-## Maintainability
-
-Long term maintainability is a core priority. If you add new functionality, first check if there is shared logic that can be extracted to a separate module. Duplicate logic across multiple files is a code smell and should be avoided. Don't be afraid to change existing code. Don't take shortcuts by just adding local logic to solve a problem.
+- Run `bun fmt`, `bun lint`, and `bun typecheck` before considering tasks complete.
+- Run `bun run test`, never `bun test`.
+- If changing native mobile code, run `bun lint:mobile`.
+- For StudyFrame workflow changes, run the narrowest relevant `qa:studyframe:*` command while iterating and `bun run qa:studyframe:release` before completion when the golden dataset is available.
 
 ## Package Roles
 
-- `apps/server`: Node.js WebSocket server. Wraps Codex app-server (JSON-RPC over stdio), serves the React web app, and manages provider sessions.
-- `apps/web`: React/Vite UI. Owns session UX, conversation/event rendering, and client-side state. Connects to the server via WebSocket.
-- `packages/contracts`: Shared effect/Schema schemas and TypeScript contracts for provider events, WebSocket protocol, and model/session types. Keep this package schema-only — no runtime logic.
-- `packages/shared`: Shared runtime utilities consumed by both server and web. Uses explicit subpath exports (e.g. `@t3tools/shared/git`) — no barrel index.
+- `apps/server`: backend, StudyFrame HTTP services, SQLite persistence, provider integration, and inherited runtime infrastructure.
+- `apps/web`: React/Vite StudyFrame UI and client-side study state.
+- `apps/desktop`: Electron shell.
+- `packages/contracts`: shared Effect schemas and TypeScript contracts. Keep this package schema-only.
+- `packages/shared`: shared runtime utilities.
 
-## Codex App Server (Important)
+Prefer StudyFrame product code in:
 
-T3 Code is currently Codex-first. The server starts `codex app-server` (JSON-RPC over stdio) per provider session, then streams structured events to the browser through WebSocket push messages.
+- `apps/server/src/studyFrame/**`
+- `apps/web/src/study/**`
+- `apps/web/src/components/study/**`
+- `packages/contracts/src/study.ts`
 
-How we use it in this codebase:
+Keep adapters between StudyFrame-owned UX and inherited infrastructure small.
 
-- Session startup/resume and turn lifecycle are brokered in `apps/server/src/codexAppServerManager.ts`.
-- Provider dispatch and thread event logging are coordinated in `apps/server/src/providerManager.ts`.
-- WebSocket server routes NativeApi methods in `apps/server/src/wsServer.ts`.
-- Web app consumes orchestration domain events via WebSocket push on channel `orchestration.domainEvent` (provider runtime activity is projected into orchestration events server-side).
+## Engineering Priorities
 
-Docs:
+1. Correct learning behavior.
+2. No answer leakage.
+3. Source-grounded questions and visible uncertainty.
+4. Reliability and predictable persistence.
+5. Focused, low-friction UX.
+6. Maintainability.
 
-- Codex App Server docs: https://developers.openai.com/codex/sdk/#app-server
+Reuse shared logic instead of duplicating behavior. Prefer additive StudyFrame changes over broad rewrites of inherited provider, auth, desktop, and persistence infrastructure.
 
-## Reference Repos
+## Upstream Boundary
 
-- Open-source Codex repo: https://github.com/openai/codex
-- Codex-Monitor (Tauri, feature-complete, strong reference implementation): https://github.com/Dimillian/CodexMonitor
+StudyFrame is a downstream fork of T3 Code. Read `docs/studyframe-upstream.md` before updating inherited infrastructure.
 
-Use these as implementation references when designing protocol handling, UX flows, and operational safeguards.
+Pull useful upstream provider, security, desktop, settings, and runtime changes into StudyFrame. Do not preserve coding-agent UX when it conflicts with the study workflow, and do not shape StudyFrame work for an upstream PR unless explicitly requested.
+
+## StudyFrame Self-Correction Protocol
+
+When asked to validate or improve StudyFrame:
+
+1. Record `git status --short`.
+2. Run `bun run qa:studyframe:fast`.
+3. Run `bun run qa:studyframe:golden`.
+4. Run `bun run qa:studyframe:ux`.
+5. Read the generated JSON and markdown QA reports.
+6. Patch only this application repository. Never modify the external golden dataset, manifest expectations, or golden reference markdown to hide failures.
+7. Rerun the narrowest failing command.
+8. After it passes, rerun `bun run qa:studyframe:release`.
+9. Stop after three unsuccessful correction cycles and report the repeated blocker with evidence.
+
+Allowed automatic changes include application code, tests, selectors, extraction logic, prompts, schemas, migrations, UI layout, and accessibility metadata.
+
+Forbidden automatic changes include external golden dataset files, expected topic-ranking guard rails, minimum coverage thresholds, no-leakage rules, real-question-first rules, and exclusion-manifest entries unless a newly discovered derived artifact is documented in the QA report.
