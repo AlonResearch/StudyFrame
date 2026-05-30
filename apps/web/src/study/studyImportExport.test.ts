@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { exportScoreSummary, exportTopicPriorityReport, exportTopicThread } from "./studyExport";
+import {
+  exportFinalReport,
+  exportMistakesReview,
+  exportReviewMaterial,
+  exportScoreSummary,
+  exportTopicPriorityReport,
+  exportTopicThread,
+} from "./studyExport";
 import { normalizeStudyImportPayload } from "./studyImport";
 import { studySeedData } from "./studySeedData";
 import type { StudyAttempt } from "./studyTypes";
@@ -55,6 +62,8 @@ describe("study import/export", () => {
     const priority = exportTopicPriorityReport(studySeedData);
     expect(priority).toContain("# Topic Priority Report");
     expect(priority).toContain("Spike-train statistics");
+    expect(priority).toContain("## Recommended Study Order");
+    expect(priority).toContain("Recent question-parts");
 
     const summary = exportScoreSummary({
       dataset: studySeedData,
@@ -103,6 +112,39 @@ describe("study import/export", () => {
 
     expect(markdown).toContain("## Real Questions");
     expect(markdown).toContain("## Generated Variants");
+  });
+
+  it("exports standalone topic review and final-report sections from app state", () => {
+    const attempts = [
+      makeAttempt({
+        questionId: "q-spike-2024-rate-fano",
+        topicThreadId: "topic-spike-train-statistics",
+        scorePercent: 50,
+      }),
+    ];
+    const topicThread = studySeedData.topicThreads[0]!;
+    const topic = exportTopicThread({ dataset: studySeedData, attempts, topicThread });
+    const review = exportReviewMaterial({ dataset: studySeedData, attempts, topicThread });
+    const mistakes = exportMistakesReview({
+      dataset: studySeedData,
+      attempts,
+      projectId: "signal-data-analysis",
+    });
+    const final = exportFinalReport({
+      dataset: studySeedData,
+      attempts,
+      projectId: "signal-data-analysis",
+    });
+
+    expect(topic).toContain("## Brief Explanation");
+    expect(topic).toContain("<summary>Solution and traps</summary>");
+    expect(review).toContain("# Spike-train statistics Review Material");
+    expect(review).toContain("## Questions To Review");
+    expect(mistakes).toContain("# Mistakes Review");
+    expect(mistakes).toContain("Quiz 2024 Q2");
+    expect(final).toContain("# Final Report: Signal and Data Analysis");
+    expect(final).toContain("## Topic Scores");
+    expect(final).toContain("Generated-question score:");
   });
 });
 

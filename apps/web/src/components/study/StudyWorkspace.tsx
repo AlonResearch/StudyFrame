@@ -38,7 +38,9 @@ import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { StudyMarkdown } from "~/components/study/StudyMarkdown";
 import {
+  exportFinalReport,
   exportMistakesReview,
+  exportReviewMaterial,
   exportScoreSummary,
   exportTopicPriorityReport,
   exportTopicThread,
@@ -316,20 +318,23 @@ export function StudyWorkspace() {
                   generationEnabled={topicExhausted}
                   onGenerateSimilar={generateSimilarQuestions}
                   onExportPriority={() =>
-                    downloadMarkdown(
-                      `${exportName}-topic-priority.md`,
-                      exportTopicPriorityReport(dataset),
-                    )
+                    downloadMarkdown("topic_priority_report.md", exportTopicPriorityReport(dataset))
                   }
                   onExportSummary={() =>
                     downloadMarkdown(
-                      `${exportName}-score-summary.md`,
+                      "score_summary.md",
                       exportScoreSummary({
                         dataset,
                         attempts,
                         projectId: selectedProjectId,
                         topicThreadId: topicThread?.id ?? null,
                       }),
+                    )
+                  }
+                  onExportFinal={() =>
+                    downloadMarkdown(
+                      `final_report_${exportName}.md`,
+                      exportFinalReport({ dataset, attempts, projectId: selectedProjectId }),
                     )
                   }
                   onExportTopic={
@@ -341,11 +346,20 @@ export function StudyWorkspace() {
                           )
                       : null
                   }
+                  onExportReviewMaterial={
+                    topicThread
+                      ? () =>
+                          downloadMarkdown(
+                            `${exportName}-${topicThread.id}-review-material.md`,
+                            exportReviewMaterial({ dataset, attempts, topicThread }),
+                          )
+                      : null
+                  }
                   onExportMistakes={
                     topicThread
                       ? () =>
                           downloadMarkdown(
-                            `${exportName}-${topicThread.id}-mistakes.md`,
+                            "mistakes_review.md",
                             exportMistakesReview({ dataset, attempts, topicThread }),
                           )
                       : null
@@ -979,7 +993,9 @@ function SourceContextPanel({
   onGenerateSimilar,
   onExportPriority,
   onExportSummary,
+  onExportFinal,
   onExportTopic,
+  onExportReviewMaterial,
   onExportMistakes,
 }: {
   readonly question: StudyQuestion | null;
@@ -994,7 +1010,9 @@ function SourceContextPanel({
   readonly onGenerateSimilar: () => void;
   readonly onExportPriority: () => void;
   readonly onExportSummary: () => void;
+  readonly onExportFinal: () => void;
   readonly onExportTopic: (() => void) | null;
+  readonly onExportReviewMaterial: (() => void) | null;
   readonly onExportMistakes: (() => void) | null;
 }) {
   return (
@@ -1074,6 +1092,9 @@ function SourceContextPanel({
             <Button className="justify-start" size="sm" variant="outline" onClick={onExportSummary}>
               Score summary
             </Button>
+            <Button className="justify-start" size="sm" variant="outline" onClick={onExportFinal}>
+              Final report
+            </Button>
             <Button
               className="justify-start"
               size="sm"
@@ -1082,6 +1103,15 @@ function SourceContextPanel({
               onClick={onExportTopic ?? undefined}
             >
               Topic thread
+            </Button>
+            <Button
+              className="justify-start"
+              size="sm"
+              variant="outline"
+              disabled={!onExportReviewMaterial}
+              onClick={onExportReviewMaterial ?? undefined}
+            >
+              Review material
             </Button>
             <Button
               className="justify-start"
