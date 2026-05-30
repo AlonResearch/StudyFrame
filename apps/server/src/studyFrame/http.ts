@@ -1,4 +1,8 @@
-import { StudyFrameSnapshot, StudyImportFolderInput } from "@t3tools/contracts";
+import {
+  StudyAnalyzeProjectInput,
+  StudyFrameSnapshot,
+  StudyImportFolderInput,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
@@ -8,6 +12,7 @@ import { AuthError, ServerAuth } from "../auth/Services/ServerAuth.ts";
 import type { PersistenceDecodeError, PersistenceSqlError } from "../persistence/Errors.ts";
 import { StudyFrameRepository } from "../persistence/Services/StudyFrame.ts";
 import { browserApiCorsHeaders } from "../httpCors.ts";
+import { analyzeProjectSnapshot } from "./analyzeProject.ts";
 import { importFolderToSnapshot } from "./importFolder.ts";
 
 function respondToPersistenceError(error: PersistenceSqlError | PersistenceDecodeError) {
@@ -115,6 +120,57 @@ export const studyFrameImportFolderRouteLayer = HttpRouter.add(
     yield* repository.saveSnapshot(imported.snapshot);
 
     return HttpServerResponse.jsonUnsafe(imported, {
+      status: 200,
+      headers: browserApiCorsHeaders,
+    });
+  }).pipe(
+    Effect.catchTag("AuthError", (error) => respondToAuthError(error)),
+    Effect.catchTags({
+      PersistenceDecodeError: (error) => respondToPersistenceError(error),
+      PersistenceSqlError: (error) => respondToPersistenceError(error),
+    }),
+  ),
+);
+
+export const studyFrameAnalyzeProjectRouteLayer = HttpRouter.add(
+  "POST",
+  "/api/studyframe/analyze-project",
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const serverAuth = yield* ServerAuth;
+    yield* serverAuth.authenticateHttpRequest(request);
+
+    const input = yield* HttpServerRequest.schemaBodyJson(StudyAnalyzeProjectInput).pipe(
+      Effect.mapError(
+        (cause) =>
+          new AuthError({
+            message: "Invalid StudyFrame project analysis payload.",
+            status: 400,
+            cause,
+          }),
+      ),
+    );
+    const repository = yield* StudyFrameRepository;
+    const snapshotOption = yield* repository.loadSnapshot();
+    if (Option.isNone(snapshotOption)) {
+      return yield* new AuthError({
+        message: "Import a StudyFrame course before running analysis.",
+        status: 400,
+      });
+    }
+    const analyzed = yield* analyzeProjectSnapshot(snapshotOption.value, input).pipe(
+      Effect.mapError(
+        (cause) =>
+          new AuthError({
+            message: cause.message,
+            status: 400,
+            cause,
+          }),
+      ),
+    );
+    yield* repository.saveSnapshot(analyzed.snapshot);
+
+    return HttpServerResponse.jsonUnsafe(analyzed, {
       status: 200,
       headers: browserApiCorsHeaders,
     });

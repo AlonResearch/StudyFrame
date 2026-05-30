@@ -4,9 +4,11 @@ import {
   FileJsonIcon,
   FilePlus2Icon,
   GraduationCapIcon,
+  LoaderCircleIcon,
   RotateCcwIcon,
   SettingsIcon,
   UploadIcon,
+  WandSparklesIcon,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
@@ -39,6 +41,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { importStudyFolder } from "~/study/studyFolderImport";
 import { parseStudyImportJson } from "~/study/studyImport";
 import { getBestAttempt, getQuestionsForTopicThread } from "~/study/studyLogic";
+import { analyzeStudyProject } from "~/study/studyProjectAnalysis";
 import { useStudyFrameStore } from "~/study/studyStore";
 import type { StudyDataset } from "~/study/studyTypes";
 import { cn } from "~/lib/utils";
@@ -52,10 +55,37 @@ export function StudySidebar() {
   const replaceDataset = useStudyFrameStore((state) => state.replaceDataset);
   const resetStudyProgress = useStudyFrameStore((state) => state.resetStudyProgress);
   const [importOpen, setImportOpen] = useState(false);
+  const [analyzingProject, setAnalyzingProject] = useState(false);
+  const [analysisStatus, setAnalysisStatus] = useState<{
+    readonly tone: "error" | "success";
+    readonly message: string;
+  } | null>(null);
   const project = dataset.projects.find((candidate) => candidate.id === selectedProjectId);
   const topicThreads = dataset.topicThreads
     .filter((thread) => thread.projectId === selectedProjectId)
     .sort((left, right) => right.priorityScore - left.priorityScore);
+  const handleAnalyzeProject = () => {
+    if (!selectedProjectId || analyzingProject) return;
+    setAnalyzingProject(true);
+    setAnalysisStatus(null);
+    void analyzeStudyProject({ projectId: selectedProjectId })
+      .then(({ snapshot, result }) => {
+        replaceDataset(snapshot.dataset);
+        setAnalysisStatus({
+          tone: "success",
+          message: `Analyzed ${result.classifiedQuestionCount} questions into ${result.topicClusterCount} topic threads.`,
+        });
+      })
+      .catch((cause) => {
+        setAnalysisStatus({
+          tone: "error",
+          message: cause instanceof Error ? cause.message : "Could not analyze this course.",
+        });
+      })
+      .finally(() => {
+        setAnalyzingProject(false);
+      });
+  };
 
   return (
     <>
@@ -99,6 +129,32 @@ export function StudySidebar() {
               <div className="mt-3 flex items-start gap-2 rounded-md border border-warning/20 bg-warning/8 px-2 py-1.5 text-xs text-warning-foreground">
                 <CircleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
                 <span>{project.extractionWarnings.length} extraction warnings</span>
+              </div>
+            ) : null}
+            <Button
+              className="mt-3 w-full justify-start"
+              size="sm"
+              variant="outline"
+              disabled={!project || analyzingProject}
+              onClick={handleAnalyzeProject}
+            >
+              {analyzingProject ? (
+                <LoaderCircleIcon className="size-4 animate-spin" />
+              ) : (
+                <WandSparklesIcon className="size-4" />
+              )}
+              {analyzingProject ? "Analyzing" : "Analyze course"}
+            </Button>
+            {analysisStatus ? (
+              <div
+                className={cn(
+                  "mt-2 text-xs",
+                  analysisStatus.tone === "error"
+                    ? "text-destructive-foreground"
+                    : "text-muted-foreground",
+                )}
+              >
+                {analysisStatus.message}
               </div>
             ) : null}
           </div>

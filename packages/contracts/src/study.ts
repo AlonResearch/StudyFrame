@@ -387,3 +387,28 @@ export const StudyImportFolderResponse = Schema.Struct({
   result: StudyExtractionResult,
 });
 export type StudyImportFolderResponse = typeof StudyImportFolderResponse.Type;
+
+export const StudyAnalyzeProjectInput = Schema.Struct({
+  projectId: Schema.String,
+});
+export type StudyAnalyzeProjectInput = typeof StudyAnalyzeProjectInput.Type;
+
+export const StudyAnalysisMode = Schema.Literals(["local_fallback"]);
+export type StudyAnalysisMode = typeof StudyAnalysisMode.Type;
+
+export const StudyAnalysisResult = Schema.Struct({
+  projectId: Schema.String,
+  topicClusterCount: Schema.Number,
+  classifiedQuestionCount: Schema.Number,
+  topicModuleCount: Schema.Number,
+  practiceItemCount: Schema.Number,
+  warnings: Schema.Array(Schema.String),
+  mode: StudyAnalysisMode,
+});
+export type StudyAnalysisResult = typeof StudyAnalysisResult.Type;
+
+export const StudyAnalyzeProjectResponse = Schema.Struct({
+  snapshot: StudyFrameSnapshot,
+  result: StudyAnalysisResult,
+});
+export type StudyAnalyzeProjectResponse = typeof StudyAnalyzeProjectResponse.Type;
