@@ -12,7 +12,7 @@ import { AuthError, ServerAuth } from "../auth/Services/ServerAuth.ts";
 import type { PersistenceDecodeError, PersistenceSqlError } from "../persistence/Errors.ts";
 import { StudyFrameRepository } from "../persistence/Services/StudyFrame.ts";
 import { browserApiCorsHeaders } from "../httpCors.ts";
-import { analyzeProjectSnapshot } from "./analyzeProject.ts";
+import { analyzeProjectWithProvider } from "./analyzeProjectWithProvider.ts";
 import { importFolderToSnapshot } from "./importFolder.ts";
 
 function respondToPersistenceError(error: PersistenceSqlError | PersistenceDecodeError) {
@@ -158,7 +158,7 @@ export const studyFrameAnalyzeProjectRouteLayer = HttpRouter.add(
         status: 400,
       });
     }
-    const analyzed = yield* analyzeProjectSnapshot(snapshotOption.value, input).pipe(
+    const analyzed = yield* analyzeProjectWithProvider(snapshotOption.value, input).pipe(
       Effect.mapError(
         (cause) =>
           new AuthError({

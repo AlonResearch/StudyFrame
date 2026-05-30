@@ -73,7 +73,7 @@ export function StudySidebar() {
         replaceDataset(snapshot.dataset);
         setAnalysisStatus({
           tone: "success",
-          message: `Analyzed ${result.classifiedQuestionCount} questions into ${result.topicClusterCount} topic threads.`,
+          message: `Analyzed ${result.classifiedQuestionCount} questions into ${result.topicClusterCount} topic threads (${result.mode === "ai" ? "AI" : "local fallback"}).`,
         });
       })
       .catch((cause) => {

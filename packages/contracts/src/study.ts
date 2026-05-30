@@ -394,7 +394,7 @@ export const StudyAnalyzeProjectInput = Schema.Struct({
 });
 export type StudyAnalyzeProjectInput = typeof StudyAnalyzeProjectInput.Type;
 
-export const StudyAnalysisMode = Schema.Literals(["local_fallback"]);
+export const StudyAnalysisMode = Schema.Literals(["ai", "local_fallback"]);
 export type StudyAnalysisMode = typeof StudyAnalysisMode.Type;
 
 export const StudyAnalysisResult = Schema.Struct({
