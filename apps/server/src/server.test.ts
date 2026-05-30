@@ -77,6 +77,10 @@ import {
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { PersistenceSqlError } from "./persistence/Errors.ts";
 import {
+  StudyFrameRepository,
+  type StudyFrameRepositoryShape,
+} from "./persistence/Services/StudyFrame.ts";
+import {
   ProviderRegistry,
   type ProviderRegistryShape,
 } from "./provider/Services/ProviderRegistry.ts";
@@ -340,6 +344,7 @@ const buildAppUnderTest = (options?: {
     serverRuntimeStartup?: Partial<ServerRuntimeStartupShape>;
     serverEnvironment?: Partial<ServerEnvironmentShape>;
     repositoryIdentityResolver?: Partial<RepositoryIdentityResolverShape>;
+    studyFrameRepository?: Partial<StudyFrameRepositoryShape>;
   };
 }) =>
   Effect.gen(function* () {
@@ -616,6 +621,13 @@ const buildAppUnderTest = (options?: {
               partialFailure: Option.none(),
               error: Option.none(),
             }),
+        }),
+      ),
+      Layer.provide(
+        Layer.mock(StudyFrameRepository)({
+          loadSnapshot: () => Effect.succeed(Option.none()),
+          saveSnapshot: () => Effect.void,
+          ...options?.layers?.studyFrameRepository,
         }),
       ),
       Layer.provide(gitManagerLayer),
@@ -901,6 +913,7 @@ const assertBrowserApiCorsHeaders = (headers: Readonly<Record<string, string | u
     "GET",
     "OPTIONS",
     "POST",
+    "PUT",
   ]);
   assert.deepEqual(splitHeaderTokens(headers["access-control-allow-headers"] ?? null), [
     "authorization",
