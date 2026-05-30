@@ -286,6 +286,7 @@ export function checkDirection(input: {
   return {
     ...graded,
     tone: "direction",
+    gradingMode: "local_fallback",
     matchedRubricLabels: [],
     missingRubricLabels: [],
     feedback,
@@ -330,6 +331,7 @@ export function gradeAnswer(input: {
 
   return {
     tone: "graded",
+    gradingMode: "local_fallback",
     status,
     score,
     maxScore,
@@ -350,6 +352,7 @@ export function revealSolutionFeedback(input: {
     input.question.pointValue;
   return {
     tone: "solution",
+    gradingMode: "local_fallback",
     status: "revealed",
     score: 0,
     maxScore,

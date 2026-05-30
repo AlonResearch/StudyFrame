@@ -275,6 +275,7 @@ export type StudyPracticeSupport = typeof StudyPracticeSupport.Type;
 
 export const StudyFeedbackResult = Schema.Struct({
   tone: Schema.Literals(["direction", "graded", "solution"]),
+  gradingMode: Schema.optionalKey(Schema.Literals(["ai", "local_fallback"])),
   status: StudyQuestionStatus,
   score: Schema.Number,
   maxScore: Schema.Number,

@@ -846,6 +846,9 @@ function QuestionPracticePanel({
           >
             <div>{latestFeedback.feedback}</div>
             <div className="mt-1 text-xs text-muted-foreground">{latestFeedback.nextStep}</div>
+            <div className="mt-2 text-xs font-medium text-muted-foreground">
+              {feedbackModeLabel(latestFeedback.gradingMode)}
+            </div>
           </FeedbackBlock>
         ) : null}
 
@@ -970,6 +973,9 @@ function AttemptHistory({ attempts }: { readonly attempts: readonly StudyAttempt
             </span>
             <span className="text-muted-foreground">{attempt.scorePercent}%</span>
             <span className="text-muted-foreground">{attempt.usedHintsCount} hints</span>
+            <span className="text-muted-foreground">
+              {feedbackModeLabel(attempt.feedback.gradingMode)}
+            </span>
             <span className="ml-auto text-muted-foreground">
               {new Date(attempt.createdAt).toLocaleString()}
             </span>
@@ -1180,6 +1186,10 @@ function SourceAssetList({ assets }: { readonly assets: readonly StudySourceAsse
 function sourceAssetPreviewUri(asset: StudySourceAsset): string | null {
   if (asset.kind !== "image" || !asset.localUri) return null;
   return /^(?:data:|https?:\/\/|file:\/\/)/.test(asset.localUri) ? asset.localUri : null;
+}
+
+function feedbackModeLabel(mode: "ai" | "local_fallback" | undefined): string {
+  return mode === "ai" ? "AI feedback" : "Local fallback";
 }
 
 function ContextRow({ label, value }: { readonly label: string; readonly value: string }) {

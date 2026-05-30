@@ -113,6 +113,7 @@ describe("studyLogic", () => {
     });
 
     expect(feedback.status).toBe("partially_correct");
+    expect(feedback.gradingMode).toBe("local_fallback");
     expect(feedback.missingRubricLabels).toContain("Computes Fano factor as 12 / 8 = 1.5");
   });
 
@@ -132,6 +133,7 @@ describe("studyLogic", () => {
     const visibleFeedback = [feedback.feedback, feedback.nextStep].join(" ").toLowerCase();
 
     expect(feedback.tone).toBe("direction");
+    expect(feedback.gradingMode).toBe("local_fallback");
     expect(feedback.matchedRubricLabels).toEqual([]);
     expect(feedback.missingRubricLabels).toEqual([]);
     for (const forbidden of [
