@@ -2,6 +2,7 @@ import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as PubSub from "effect/PubSub";
 import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { describe, expect } from "vitest";
 
@@ -20,6 +21,7 @@ const makeStubTextGeneration = (overrides: Partial<TextGenerationShape>): TextGe
   generatePrContent: () => Effect.die("generatePrContent stub not configured for this test"),
   generateBranchName: () => Effect.die("generateBranchName stub not configured for this test"),
   generateThreadTitle: () => Effect.die("generateThreadTitle stub not configured for this test"),
+  generateStructured: () => Effect.die("generateStructured stub not configured for this test"),
   ...overrides,
 });
 
@@ -115,6 +117,28 @@ describe("makeTextGenerationFromRegistry", () => {
         expect(result.failure.operation).toBe("generateBranchName");
         expect(result.failure.detail).toContain("missing_instance");
       }
+    }),
+  );
+
+  it.effect("delegates structured generation to the matching instance", () =>
+    Effect.gen(function* () {
+      const personalId = ProviderInstanceId.make("codex_personal");
+      const personal = makeStubInstance(
+        personalId,
+        makeStubTextGeneration({
+          generateStructured: (input) => Effect.succeed({ summary: `${input.prompt} response` }),
+        }),
+      );
+      const tg = makeTextGenerationFromRegistry(makeStubRegistry([personal]));
+
+      const result = yield* tg.generateStructured({
+        cwd: process.cwd(),
+        prompt: "StudyFrame",
+        outputSchema: Schema.Struct({ summary: Schema.String }),
+        modelSelection: createModelSelection(personalId, "gpt-5"),
+      });
+
+      expect(result).toEqual({ summary: "StudyFrame response" });
     }),
   );
 });

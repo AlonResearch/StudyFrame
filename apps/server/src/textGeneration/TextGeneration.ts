@@ -1,6 +1,7 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import type * as Schema from "effect/Schema";
 import type { ChatAttachment, ModelSelection, ProviderInstanceId } from "@t3tools/contracts";
 import { TextGenerationError } from "@t3tools/contracts";
 
@@ -70,6 +71,14 @@ export interface ThreadTitleGenerationResult {
   title: string;
 }
 
+export interface StructuredGenerationInput<S extends Schema.Top> {
+  cwd: string;
+  prompt: string;
+  outputSchema: S;
+  /** What model and provider to use for generation. */
+  modelSelection: ModelSelection;
+}
+
 export interface TextGenerationService {
   generateCommitMessage(
     input: CommitMessageGenerationInput,
@@ -77,10 +86,11 @@ export interface TextGenerationService {
   generatePrContent(input: PrContentGenerationInput): Promise<PrContentGenerationResult>;
   generateBranchName(input: BranchNameGenerationInput): Promise<BranchNameGenerationResult>;
   generateThreadTitle(input: ThreadTitleGenerationInput): Promise<ThreadTitleGenerationResult>;
+  generateStructured<S extends Schema.Top>(input: StructuredGenerationInput<S>): Promise<S["Type"]>;
 }
 
 /**
- * TextGenerationShape - Service API for commit/PR text generation.
+ * TextGenerationShape - Service API for structured provider text generation.
  */
 export interface TextGenerationShape {
   /**
@@ -110,6 +120,13 @@ export interface TextGenerationShape {
   readonly generateThreadTitle: (
     input: ThreadTitleGenerationInput,
   ) => Effect.Effect<ThreadTitleGenerationResult, TextGenerationError>;
+
+  /**
+   * Generate schema-validated structured output from a caller-owned prompt.
+   */
+  readonly generateStructured: <S extends Schema.Top>(
+    input: StructuredGenerationInput<S>,
+  ) => Effect.Effect<S["Type"], TextGenerationError, S["DecodingServices"]>;
 }
 
 /**
@@ -119,15 +136,16 @@ export class TextGeneration extends Context.Service<TextGeneration, TextGenerati
   "t3/textGeneration/TextGeneration",
 ) {}
 
-type TextGenerationOp =
+export type TextGenerationOperation =
   | "generateCommitMessage"
   | "generatePrContent"
   | "generateBranchName"
-  | "generateThreadTitle";
+  | "generateThreadTitle"
+  | "generateStructured";
 
 const resolveInstance = (
   registry: ProviderInstanceRegistryShape,
-  operation: TextGenerationOp,
+  operation: TextGenerationOperation,
   instanceId: ProviderInstanceId,
 ): Effect.Effect<ProviderInstance["textGeneration"], TextGenerationError> =>
   registry.getInstance(instanceId).pipe(
@@ -161,6 +179,10 @@ export const makeTextGenerationFromRegistry = (
   generateThreadTitle: (input) =>
     resolveInstance(registry, "generateThreadTitle", input.modelSelection.instanceId).pipe(
       Effect.flatMap((textGeneration) => textGeneration.generateThreadTitle(input)),
+    ),
+  generateStructured: (input) =>
+    resolveInstance(registry, "generateStructured", input.modelSelection.instanceId).pipe(
+      Effect.flatMap((textGeneration) => textGeneration.generateStructured(input)),
     ),
 });
 
