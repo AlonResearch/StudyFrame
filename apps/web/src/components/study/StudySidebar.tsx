@@ -1,18 +1,20 @@
 import {
   BookOpenIcon,
   CircleAlertIcon,
+  ClipboardCheckIcon,
   ChevronRightIcon,
   FileJsonIcon,
   FilePlus2Icon,
+  FolderOpenIcon,
   GraduationCapIcon,
   LoaderCircleIcon,
   RotateCcwIcon,
   SettingsIcon,
   UploadIcon,
-  WandSparklesIcon,
 } from "lucide-react";
+import { autoAnimate } from "@formkit/auto-animate";
 import { Link, useLocation } from "@tanstack/react-router";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { APP_DISPLAY_NAME, APP_VERSION } from "~/branding";
 import { Button } from "~/components/ui/button";
@@ -48,7 +50,13 @@ import { getBestAttempt, getQuestionsForTopicThread } from "~/study/studyLogic";
 import { analyzeStudyProject } from "~/study/studyProjectAnalysis";
 import { useStudyFrameStore } from "~/study/studyStore";
 import type { StudyDataset } from "~/study/studyTypes";
+import { ensureLocalApi } from "~/localApi";
 import { cn } from "~/lib/utils";
+
+const SIDEBAR_LIST_ANIMATION_OPTIONS = {
+  duration: 180,
+  easing: "ease-out",
+} as const;
 
 export function StudySidebar() {
   const pathname = useLocation({ select: (location) => location.pathname });
@@ -63,6 +71,36 @@ export function StudySidebar() {
   const resetStudyProgress = useStudyFrameStore((state) => state.resetStudyProgress);
   const [importOpen, setImportOpen] = useState(false);
   const [analyzingProject, setAnalyzingProject] = useState(false);
+  const [expandedCourseIds, setExpandedCourseIds] = useState<ReadonlySet<string>>(
+    () => new Set(dataset.projects.map((courseProject) => courseProject.id)),
+  );
+  const animatedListsRef = useRef(new WeakSet<HTMLElement>());
+  const attachListAutoAnimateRef = useCallback((node: HTMLElement | null) => {
+    if (!node || animatedListsRef.current.has(node)) return;
+    autoAnimate(node, SIDEBAR_LIST_ANIMATION_OPTIONS);
+    animatedListsRef.current.add(node);
+  }, []);
+  const toggleCourse = useCallback((projectId: string) => {
+    setExpandedCourseIds((current) => {
+      const next = new Set(current);
+      if (next.has(projectId)) {
+        next.delete(projectId);
+      } else {
+        next.add(projectId);
+      }
+      return next;
+    });
+  }, []);
+  useEffect(() => {
+    const projectIds = new Set(dataset.projects.map((courseProject) => courseProject.id));
+    setExpandedCourseIds((current) => {
+      const next = new Set([...current].filter((projectId) => projectIds.has(projectId)));
+      for (const projectId of projectIds) {
+        if (!current.has(projectId)) next.add(projectId);
+      }
+      return next;
+    });
+  }, [dataset.projects]);
   const [analysisStatus, setAnalysisStatus] = useState<{
     readonly tone: "error" | "success";
     readonly message: string;
@@ -82,11 +120,11 @@ export function StudySidebar() {
     );
   }
 
-  const handleAnalyzeProject = () => {
-    if (!selectedProjectId || analyzingProject) return;
+  const handleAnalyzeProject = (projectId = selectedProjectId): Promise<void> => {
+    if (!projectId || analyzingProject) return Promise.resolve();
     setAnalyzingProject(true);
     setAnalysisStatus(null);
-    void analyzeStudyProject({ projectId: selectedProjectId })
+    return analyzeStudyProject({ projectId })
       .then(({ snapshot, result }) => {
         replaceDataset(snapshot.dataset);
         setAnalysisStatus({
@@ -124,12 +162,23 @@ export function StudySidebar() {
       <SidebarContent>
         <SidebarGroup className="px-2 py-3">
           <div className="px-2 pb-2 text-xs font-medium text-muted-foreground">Courses</div>
-          <SidebarMenu>
+          <SidebarMenu ref={attachListAutoAnimateRef}>
             {courseProjects.map((courseProject) => {
               const isProjectActive = selectedProjectId === courseProject.id;
+              const isCourseExpanded = expandedCourseIds.has(courseProject.id);
               const projectTopicThreads = sortedTopicThreads.filter(
                 (thread) => thread.projectId === courseProject.id,
               );
+              const activeTopicThread =
+                isProjectActive && selectedTopicThreadId
+                  ? (projectTopicThreads.find((thread) => thread.id === selectedTopicThreadId) ??
+                    null)
+                  : null;
+              const renderedTopicThreads = isCourseExpanded
+                ? projectTopicThreads
+                : activeTopicThread
+                  ? [activeTopicThread]
+                  : [];
               const projectQuestionCount = projectTopicThreads.reduce(
                 (count, thread) =>
                   count +
@@ -141,89 +190,104 @@ export function StudySidebar() {
 
               return (
                 <SidebarMenuItem key={courseProject.id}>
-                  <SidebarMenuButton
-                    isActive={isProjectActive}
-                    className="h-auto items-start gap-2 py-2"
-                    onClick={() => selectProject(courseProject.id)}
-                    render={<button type="button" />}
+                  <div className="group/course-header relative flex items-stretch">
+                    <button
+                      type="button"
+                      aria-expanded={isCourseExpanded}
+                      aria-label={`${isCourseExpanded ? "Collapse" : "Expand"} ${courseProject.name}`}
+                      className="absolute top-2 left-1 z-10 flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-hidden transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                      onClick={() => toggleCourse(courseProject.id)}
+                    >
+                      <ChevronRightIcon
+                        className={cn(
+                          "size-4 shrink-0 transition-transform duration-150",
+                          isCourseExpanded && "rotate-90",
+                        )}
+                      />
+                    </button>
+                    <SidebarMenuButton
+                      isActive={isProjectActive && selectedTopicThreadId === null}
+                      className="h-auto items-start gap-2 py-2 pl-9 transition-colors duration-150"
+                      onClick={() => {
+                        selectProject(courseProject.id);
+                        setExpandedCourseIds((current) => {
+                          if (current.has(courseProject.id)) return current;
+                          const next = new Set(current);
+                          next.add(courseProject.id);
+                          return next;
+                        });
+                      }}
+                      render={<button type="button" />}
+                    >
+                      <div className="flex min-w-0 flex-1 flex-col gap-1 text-left">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <BookOpenIcon className="size-4 shrink-0 text-muted-foreground" />
+                          <span className="truncate text-sm font-medium">{courseProject.name}</span>
+                          {courseProject.extractionWarnings.length > 0 ? (
+                            <Badge size="sm" variant="outline">
+                              {courseProject.extractionWarnings.length} warn
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{projectTopicThreads.length} topics</span>
+                          <span>{projectQuestionCount} real questions</span>
+                        </div>
+                        <div className="line-clamp-1 text-xs text-muted-foreground/80">
+                          {courseProject.sourceRoot}
+                        </div>
+                      </div>
+                    </SidebarMenuButton>
+                  </div>
+                  <SidebarMenuSub
+                    ref={attachListAutoAnimateRef}
+                    className="overflow-hidden transition-colors duration-150"
                   >
-                    <ChevronRightIcon
-                      className={cn(
-                        "mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform",
-                        isProjectActive && "rotate-90",
-                      )}
-                    />
-                    <div className="flex min-w-0 flex-1 flex-col gap-1 text-left">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <BookOpenIcon className="size-4 shrink-0 text-muted-foreground" />
-                        <span className="truncate text-sm font-medium">{courseProject.name}</span>
-                        {courseProject.extractionWarnings.length > 0 ? (
-                          <Badge size="sm" variant="outline">
-                            {courseProject.extractionWarnings.length} warn
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{projectTopicThreads.length} topics</span>
-                        <span>{projectQuestionCount} real questions</span>
-                      </div>
-                      <div className="line-clamp-1 text-xs text-muted-foreground/80">
-                        {courseProject.sourceRoot}
-                      </div>
-                    </div>
-                  </SidebarMenuButton>
-                  {isProjectActive ? (
-                    <SidebarMenuSub>
-                      {projectTopicThreads.map((thread) => {
-                        const questions = getQuestionsForTopicThread(dataset, thread.id);
-                        const realQuestions = questions.filter(
-                          (question) => question.isRealQuestion,
-                        );
-                        const generatedQuestions = questions.length - realQuestions.length;
-                        const attempted = realQuestions.filter(
-                          (question) => getBestAttempt(attempts, question.id) !== null,
-                        ).length;
-                        const isActive = selectedTopicThreadId === thread.id;
+                    {renderedTopicThreads.map((thread) => {
+                      const questions = getQuestionsForTopicThread(dataset, thread.id);
+                      const realQuestions = questions.filter((question) => question.isRealQuestion);
+                      const generatedQuestions = questions.length - realQuestions.length;
+                      const attempted = realQuestions.filter(
+                        (question) => getBestAttempt(attempts, question.id) !== null,
+                      ).length;
+                      const isActive = selectedTopicThreadId === thread.id;
 
-                        return (
-                          <SidebarMenuSubItem key={thread.id}>
-                            <SidebarMenuSubButton
-                              isActive={isActive}
-                              className="h-auto items-start py-2"
-                              onClick={() => selectTopicThread(thread.id)}
-                              render={<button type="button" />}
-                            >
-                              <div className="flex min-w-0 flex-1 flex-col gap-1 text-left">
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <span className="truncate text-sm font-medium">
-                                    {thread.displayName}
-                                  </span>
-                                  {generatedQuestions > 0 ? (
-                                    <Badge size="sm" variant="outline">
-                                      {generatedQuestions} gen
-                                    </Badge>
-                                  ) : null}
-                                </div>
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                  <span>
-                                    {attempted}/{realQuestions.length} real
-                                  </span>
-                                  <span>Priority {Math.round(thread.priorityScore * 100)}</span>
-                                </div>
-                                <ProgressBar
-                                  value={
-                                    realQuestions.length === 0
-                                      ? 0
-                                      : attempted / realQuestions.length
-                                  }
-                                />
+                      return (
+                        <SidebarMenuSubItem key={thread.id}>
+                          <SidebarMenuSubButton
+                            isActive={isActive}
+                            className="h-auto items-start py-2 transition-colors duration-150"
+                            onClick={() => selectTopicThread(thread.id)}
+                            render={<button type="button" />}
+                          >
+                            <div className="flex min-w-0 flex-1 flex-col gap-1 text-left">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className="truncate text-sm font-medium">
+                                  {thread.displayName}
+                                </span>
+                                {generatedQuestions > 0 ? (
+                                  <Badge size="sm" variant="outline">
+                                    {generatedQuestions} gen
+                                  </Badge>
+                                ) : null}
                               </div>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        );
-                      })}
-                    </SidebarMenuSub>
-                  ) : null}
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span>
+                                  {attempted}/{realQuestions.length} real
+                                </span>
+                                <span>Priority {Math.round(thread.priorityScore * 100)}</span>
+                              </div>
+                              <ProgressBar
+                                value={
+                                  realQuestions.length === 0 ? 0 : attempted / realQuestions.length
+                                }
+                              />
+                            </div>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      );
+                    })}
+                  </SidebarMenuSub>
                 </SidebarMenuItem>
               );
             })}
@@ -239,14 +303,14 @@ export function StudySidebar() {
             size="sm"
             variant="outline"
             disabled={!project || analyzingProject}
-            onClick={handleAnalyzeProject}
+            onClick={() => void handleAnalyzeProject()}
           >
             {analyzingProject ? (
               <LoaderCircleIcon className="size-4 animate-spin" />
             ) : (
-              <WandSparklesIcon className="size-4" />
+              <ClipboardCheckIcon className="size-4" />
             )}
-            {analyzingProject ? "Analyzing" : "Analyze course"}
+            {analyzingProject ? "Checking priorities" : "Check priorities"}
           </Button>
           {analysisStatus ? (
             <div
@@ -286,8 +350,9 @@ export function StudySidebar() {
         projectId={selectedProjectId}
         onFolderImported={(dataset) => {
           replaceDataset(dataset);
-          setImportOpen(false);
         }}
+        analyzingProject={analyzingProject}
+        onCheckPriorities={handleAnalyzeProject}
         onImport={(rawJson) => {
           replaceDataset(parseStudyImportJson(rawJson, new Date().toISOString()));
           setImportOpen(false);
@@ -324,7 +389,7 @@ function ProgressBar({ value }: { value: number }) {
   return (
     <div className="h-1.5 overflow-hidden rounded-full bg-muted">
       <div
-        className="h-full rounded-full bg-primary"
+        className="h-full rounded-full bg-primary transition-[width] duration-[180ms] ease-out"
         style={{ width: `${Math.max(0, Math.min(100, value * 100))}%` }}
       />
     </div>
@@ -336,12 +401,16 @@ function StudyImportDialog({
   onOpenChange,
   projectId,
   onFolderImported,
+  analyzingProject,
+  onCheckPriorities,
   onImport,
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly projectId: string | null;
   readonly onFolderImported: (dataset: StudyDataset) => void;
+  readonly analyzingProject: boolean;
+  readonly onCheckPriorities: (projectId: string) => Promise<void>;
   readonly onImport: (rawJson: string) => void;
 }) {
   const [rawJson, setRawJson] = useState("");
@@ -349,6 +418,17 @@ function StudyImportDialog({
   const [error, setError] = useState<string | null>(null);
   const [importingFolder, setImportingFolder] = useState(false);
   const [folderImportSummary, setFolderImportSummary] = useState<string | null>(null);
+  const [secondaryOptionsOpen, setSecondaryOptionsOpen] = useState(false);
+  const [importedProjectId, setImportedProjectId] = useState<string | null>(null);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setError(null);
+      setFolderImportSummary(null);
+      setImportedProjectId(null);
+    }
+    onOpenChange(nextOpen);
+  };
 
   const handleImport = () => {
     try {
@@ -360,16 +440,14 @@ function StudyImportDialog({
     }
   };
 
-  const handleFolderImport = () => {
-    const trimmedSourceRoot = sourceRoot.trim();
-    if (!trimmedSourceRoot || importingFolder) return;
-
+  const importFolderPath = (folderPath: string) => {
     setImportingFolder(true);
     setError(null);
     setFolderImportSummary(null);
-    void importStudyFolder({ projectId, sourceRoot: trimmedSourceRoot })
+    void importStudyFolder({ projectId, sourceRoot: folderPath })
       .then(({ snapshot, result }) => {
         onFolderImported(snapshot.dataset);
+        setImportedProjectId(snapshot.dataset.projects[0]?.id ?? null);
         setFolderImportSummary(
           `Imported ${result.importedDocumentCount} files and ${result.questionCandidateCount} question candidates.`,
         );
@@ -381,6 +459,32 @@ function StudyImportDialog({
       .finally(() => {
         setImportingFolder(false);
       });
+  };
+
+  const handleCheckPriorities = () => {
+    if (!importedProjectId || analyzingProject) return;
+    void onCheckPriorities(importedProjectId).then(() => {
+      handleOpenChange(false);
+    });
+  };
+
+  const handleOpenFolder = () => {
+    if (importingFolder) return;
+    void ensureLocalApi()
+      .dialogs.pickFolder()
+      .then((folderPath) => {
+        if (!folderPath) return;
+        importFolderPath(folderPath);
+      })
+      .catch((cause) => {
+        setError(cause instanceof Error ? cause.message : "Could not open the folder picker.");
+      });
+  };
+
+  const handleFolderImport = () => {
+    const trimmedSourceRoot = sourceRoot.trim();
+    if (!trimmedSourceRoot || importingFolder) return;
+    importFolderPath(trimmedSourceRoot);
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -398,69 +502,106 @@ function StudyImportDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogPopup className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Import course</DialogTitle>
           <DialogDescription>
-            Import a local course folder through the server, or paste StudyFrame JSON. Imported
-            questions become the source practice queue.
+            Open a local course folder first. Extra source inputs are available when a folder picker
+            is not enough.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
-          <div className="rounded-lg border border-border bg-background/65 p-3">
-            <div className="text-xs font-medium text-muted-foreground">Course folder</div>
-            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-              <Input
-                value={sourceRoot}
-                onChange={(event) => setSourceRoot(event.target.value)}
-                placeholder="G:\My Drive\Bar-Ilan\Signal and Data Analysis\Quiz"
-              />
-              <Button
-                className="shrink-0"
-                size="sm"
-                disabled={sourceRoot.trim().length === 0 || importingFolder}
-                onClick={handleFolderImport}
-              >
-                <FilePlus2Icon className="size-4" />
-                {importingFolder ? "Importing" : "Import folder"}
+          <div className="rounded-lg border border-border bg-background/65 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="text-sm font-medium">Course folder</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Select the folder that contains past exams, quizzes, lecture material, solutions,
+                  and supporting files.
+                </div>
+              </div>
+              <Button className="shrink-0" disabled={importingFolder} onClick={handleOpenFolder}>
+                {importingFolder ? (
+                  <LoaderCircleIcon className="size-4 animate-spin" />
+                ) : (
+                  <FolderOpenIcon className="size-4" />
+                )}
+                {importingFolder ? "Importing" : "Open folder"}
               </Button>
             </div>
             {folderImportSummary ? (
-              <div className="mt-2 text-xs text-muted-foreground">{folderImportSummary}</div>
+              <div className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                {folderImportSummary}
+              </div>
             ) : null}
           </div>
 
-          <div className="my-4 h-px bg-border" />
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline" render={<label />}>
-              <UploadIcon className="size-4" />
-              Choose JSON
-              <input
-                className="sr-only"
-                type="file"
-                accept="application/json,.json"
-                onChange={handleFileChange}
-              />
-            </Button>
+          <div className="mt-4">
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => {
-                setRawJson(JSON.stringify(exampleImportPayload, null, 2));
-                setError(null);
-              }}
+              onClick={() => setSecondaryOptionsOpen((current) => !current)}
             >
-              <FileJsonIcon className="size-4" />
-              Example
+              <FilePlus2Icon className="size-4" />
+              Source material options
             </Button>
           </div>
-          <Textarea
-            className="mt-3 min-h-72 font-mono text-xs"
-            value={rawJson}
-            onChange={(event) => setRawJson(event.target.value)}
-          />
+
+          {secondaryOptionsOpen ? (
+            <div className="mt-3 space-y-4 rounded-lg border border-border bg-muted/20 p-3">
+              <div>
+                <div className="text-xs font-medium text-muted-foreground">Server folder path</div>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    value={sourceRoot}
+                    onChange={(event) => setSourceRoot(event.target.value)}
+                    placeholder="G:\My Drive\Bar-Ilan\Signal and Data Analysis\Quiz"
+                  />
+                  <Button
+                    className="shrink-0"
+                    size="sm"
+                    disabled={sourceRoot.trim().length === 0 || importingFolder}
+                    onClick={handleFolderImport}
+                  >
+                    <FilePlus2Icon className="size-4" />
+                    {importingFolder ? "Importing" : "Use path"}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="h-px bg-border" />
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="outline" render={<label />}>
+                  <UploadIcon className="size-4" />
+                  Choose JSON
+                  <input
+                    className="sr-only"
+                    type="file"
+                    accept="application/json,.json"
+                    onChange={handleFileChange}
+                  />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setRawJson(JSON.stringify(exampleImportPayload, null, 2));
+                    setError(null);
+                  }}
+                >
+                  <FileJsonIcon className="size-4" />
+                  Example
+                </Button>
+              </div>
+              <Textarea
+                className="min-h-56 font-mono text-xs"
+                value={rawJson}
+                onChange={(event) => setRawJson(event.target.value)}
+              />
+            </div>
+          ) : null}
           {error ? (
             <div className="mt-3 rounded-lg border border-destructive/20 bg-destructive/8 px-3 py-2 text-sm text-destructive-foreground">
               {error}
@@ -468,11 +609,21 @@ function StudyImportDialog({
           ) : null}
         </DialogPanel>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => handleOpenChange(false)}>
             Cancel
           </Button>
-          <Button disabled={rawJson.trim().length === 0} onClick={handleImport}>
-            Import
+          {secondaryOptionsOpen && rawJson.trim().length > 0 ? (
+            <Button variant="outline" onClick={handleImport}>
+              Import JSON
+            </Button>
+          ) : null}
+          <Button disabled={!importedProjectId || analyzingProject} onClick={handleCheckPriorities}>
+            {analyzingProject ? (
+              <LoaderCircleIcon className="size-4 animate-spin" />
+            ) : (
+              <ClipboardCheckIcon className="size-4" />
+            )}
+            {analyzingProject ? "Checking priorities" : "Check priorities"}
           </Button>
         </DialogFooter>
       </DialogPopup>

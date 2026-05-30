@@ -84,13 +84,8 @@ export interface StudyFrameStoreState {
 }
 
 const seedSelectedProjectId = studySeedData.projects[0]?.id ?? "";
-const seedSelectedTopicThreadId = initialSelectedTopicThreadId(
-  studySeedData,
-  seedSelectedProjectId,
-);
-const seedActiveQuestionId = seedSelectedTopicThreadId
-  ? (getNextRealQuestion(studySeedData, [], seedSelectedTopicThreadId)?.id ?? null)
-  : null;
+const seedSelectedTopicThreadId = null;
+const seedActiveQuestionId = null;
 
 export const useStudyFrameStore = create<StudyFrameStoreState>()(
   persist(
@@ -111,15 +106,10 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
       reviewModeTopicThreadId: null,
 
       selectProject: (projectId) => {
-        const state = get();
-        const selectedTopicThreadId = initialSelectedTopicThreadId(state.dataset, projectId);
-        const nextQuestion = selectedTopicThreadId
-          ? resolveNextQuestionForTopic(state.dataset, state.attempts, selectedTopicThreadId)
-          : null;
         set({
           selectedProjectId: projectId,
-          selectedTopicThreadId,
-          activeQuestionId: nextQuestion?.id ?? null,
+          selectedTopicThreadId: null,
+          activeQuestionId: null,
           exhaustionSummaryId: null,
           reviewModeTopicThreadId: null,
         });
@@ -127,6 +117,9 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
 
       selectTopicThread: (topicThreadId) => {
         const state = get();
+        if (state.selectedTopicThreadId === topicThreadId) {
+          return;
+        }
         const topicThread = state.dataset.topicThreads.find(
           (thread) => thread.id === topicThreadId,
         );
@@ -493,21 +486,14 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
       replaceDataset: (dataset) => {
         const normalizedDataset = withDerivedStudyDomainModel(dataset);
         const selectedProjectId = normalizedDataset.projects[0]?.id ?? "";
-        const selectedTopicThreadId = initialSelectedTopicThreadId(
-          normalizedDataset,
-          selectedProjectId,
-        );
-        const activeQuestionId = selectedTopicThreadId
-          ? (getNextRealQuestion(normalizedDataset, [], selectedTopicThreadId)?.id ?? null)
-          : null;
         set({
           dataset: normalizedDataset,
           attempts: [],
           completionSummaries: [],
           generatedQuestionBatches: [],
           selectedProjectId,
-          selectedTopicThreadId,
-          activeQuestionId,
+          selectedTopicThreadId: null,
+          activeQuestionId: null,
           answerDraftByQuestionId: {},
           hintCountByQuestionId: {},
           latestHintByQuestionId: {},
