@@ -60,7 +60,11 @@
     "dist:desktop:win:x64": "node scripts/build-desktop-artifact.ts --platform win --target nsis --arch x64",
     "release:smoke": "node scripts/release-smoke.ts",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist apps/*/dist-electron packages/*/dist .turbo apps/*/.turbo packages/*/.turbo",
-    "sync:vscode-icons": "node scripts/sync-vscode-icons.mjs"
+    "sync:vscode-icons": "node scripts/sync-vscode-icons.mjs",
+    "qa:studyframe:fast": "bun run --cwd apps/server test -- src/studyFrame && bun run --cwd apps/web test -- src/study && bun run --cwd packages/contracts typecheck",
+    "qa:studyframe:golden": "bun scripts/studyframe-golden-audit.ts",
+    "qa:studyframe:ux": "bun run --cwd apps/web test:browser -- src/components/study",
+    "qa:studyframe:release": "bun run qa:studyframe:fast && bun run qa:studyframe:golden && bun run qa:studyframe:ux && bun fmt && bun lint && bun typecheck && bun run test && bun run test:desktop-smoke"
   },
   "devDependencies": {
     "@effect/tsgo": "catalog:",
