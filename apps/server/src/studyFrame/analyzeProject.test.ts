@@ -162,6 +162,7 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
                   practiceItems: [
                     {
                       questionId: importedQuestionId,
+                      cleanedPromptMarkdown: "Compute the cleaned provider firing-rate prompt.",
                       answerInputType: "numeric",
                       answerOptions: [],
                       tableColumns: [],
@@ -194,6 +195,18 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
         "4 Hz",
       ]);
       assert.equal(analyzed.snapshot.dataset.practiceItems?.[0]?.answerInputType, "numeric");
+      assert.equal(
+        analyzed.snapshot.dataset.questions[0]?.rawPrompt,
+        "Compute the cleaned provider firing-rate prompt.",
+      );
+      assert.equal(
+        analyzed.snapshot.dataset.questionCandidates?.[0]?.rawPromptMarkdown,
+        "Compute the cleaned provider firing-rate prompt.",
+      );
+      assert.equal(
+        analyzed.snapshot.dataset.practiceItems?.[0]?.promptMarkdown,
+        "Compute the cleaned provider firing-rate prompt.",
+      );
       assert.equal(
         analyzed.snapshot.dataset.topicModules?.[0]?.generationMetadataJson?.promptVersion,
         "studyframe-analysis-v1",

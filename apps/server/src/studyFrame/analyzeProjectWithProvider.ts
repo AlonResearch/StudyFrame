@@ -63,6 +63,7 @@ const ProviderQuestionSupport = Schema.Struct({
 
 const ProviderPracticeItem = Schema.Struct({
   questionId: Schema.String,
+  cleanedPromptMarkdown: Schema.String,
   answerInputType: StudyAnswerInputType,
   answerOptions: Schema.Array(Schema.String),
   tableColumns: Schema.Array(Schema.String),
@@ -171,6 +172,7 @@ function buildProviderAnalysisPrompt(local: StudyAnalyzeProjectResponse): string
     "Produce concise theory notes, formula reminders when relevant, common traps, hints, rubrics, and step-by-step solutions.",
     "Write a concise priority rationale for each topic using the supplied frequency, recency, and weighted-point facts. Do not invent counts.",
     "Choose an answerInputType for each question. Use free_text unless numeric, formula, choice, table, plot checklist, or file upload controls materially improve the answer workflow.",
+    "Return a cleanedPromptMarkdown transcription for each question. Preserve the question meaning and requested work, remove extraction noise, and never add an answer or solution.",
     "Populate answerOptions for choice controls, tableColumns for tables, and plotChecklistItems for plot checklists. Otherwise return empty arrays.",
     "Do not omit real questions. Keep hints useful without directly giving away the final answer.",
     JSON.stringify(
@@ -281,6 +283,12 @@ function applyProviderEnhancement(
   const topicModules = (dataset.topicModules ?? []).map((module) =>
     mergeTopicModule(module, moduleByClusterId.get(module.topicClusterId), generationMetadataJson),
   );
+  const questions = mergeQuestionPrompts(dataset.questions, enhancement.practiceItems);
+  const questionCandidates = mergeQuestionCandidatePrompts(
+    dataset.questionCandidates ?? [],
+    dataset.questions,
+    enhancement.practiceItems,
+  );
   const questionSupport = dataset.questionSupport.map((support) =>
     mergeQuestionSupport(
       support,
@@ -294,6 +302,8 @@ function applyProviderEnhancement(
       ...local.snapshot,
       dataset: {
         ...dataset,
+        questions,
+        questionCandidates,
         topicClusters: (dataset.topicClusters ?? []).map((cluster) =>
           mergeTopicCluster(cluster, moduleByClusterId.get(cluster.id)),
         ),
@@ -301,14 +311,14 @@ function applyProviderEnhancement(
         questionSupport,
         practiceItems: mergePracticeItems(
           dataset.practiceItems ?? [],
-          dataset.questions,
-          dataset.questionCandidates ?? [],
+          questions,
+          questionCandidates,
           enhancement.practiceItems,
         ),
         practiceSupport: mergePracticeSupport(
           dataset.practiceSupport ?? [],
-          dataset.questions,
-          dataset.questionCandidates ?? [],
+          questions,
+          questionCandidates,
           dataset.practiceItems ?? [],
           questionSupport,
         ),
@@ -319,6 +329,43 @@ function applyProviderEnhancement(
       mode: "ai",
     },
   };
+}
+
+function mergeQuestionPrompts(
+  questions: readonly StudyQuestion[],
+  enhancements: readonly ProviderAnalysisEnhancement["practiceItems"][number][],
+): StudyQuestion[] {
+  const enhancementByQuestionId = new Map(
+    enhancements.map((enhancement) => [enhancement.questionId, enhancement]),
+  );
+  return questions.map((question) => {
+    const cleanedPrompt = enhancementByQuestionId.get(question.id)?.cleanedPromptMarkdown.trim();
+    return cleanedPrompt
+      ? {
+          ...question,
+          rawPrompt: cleanedPrompt,
+          normalizedPrompt: normalizePrompt(cleanedPrompt),
+        }
+      : question;
+  });
+}
+
+function mergeQuestionCandidatePrompts(
+  candidates: readonly StudyQuestionCandidate[],
+  questions: readonly StudyQuestion[],
+  enhancements: readonly ProviderAnalysisEnhancement["practiceItems"][number][],
+): StudyQuestionCandidate[] {
+  const enhancementByQuestionId = new Map(
+    enhancements.map((enhancement) => [enhancement.questionId, enhancement]),
+  );
+  const questionByCandidateId = makeQuestionByCandidateId(questions, candidates);
+  return candidates.map((candidate) => {
+    const question = questionByCandidateId.get(candidate.id);
+    const cleanedPrompt = question
+      ? enhancementByQuestionId.get(question.id)?.cleanedPromptMarkdown.trim()
+      : undefined;
+    return cleanedPrompt ? { ...candidate, rawPromptMarkdown: cleanedPrompt } : candidate;
+  });
 }
 
 function mergeQuestionClassification(
@@ -551,6 +598,7 @@ function mergePracticeItems(
     return {
       ...item,
       answerInputType,
+      promptMarkdown: preferText(enhancement.cleanedPromptMarkdown, item.promptMarkdown),
       sourceMetadataJson: {
         ...asRecord(item.sourceMetadataJson),
         ...(answerOptions.length > 0 ? { answerOptions } : {}),
@@ -720,4 +768,8 @@ function priorityLabel(priorityScore: number): StudyTopicCluster["priorityLabel"
 
 function unique(values: readonly string[]): string[] {
   return [...new Set(values)];
+}
+
+function normalizePrompt(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
 }
