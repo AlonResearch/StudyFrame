@@ -111,6 +111,11 @@ JSON import, project analysis, course selection, nested topic-thread selection, 
 navigation, and demo reset. On `/settings/*` routes the shell sidebar renders the inherited settings
 section navigation instead of the course/topic tree.
 
+The study workspace header exposes a three-dots `Extra information` menu. Course dashboards open
+course details or markdown reports in the shared right-side overlay sheet. Topic practice opens the
+refresher, real-question queue, or source context in that sheet. The sheet starts closed after
+course or topic navigation so the primary dashboard and answer workspace keep their full width.
+
 On workspace mount, `apps/web/src/study/studyServerSync.ts`:
 
 1. Loads `/api/studyframe/snapshot`.
@@ -131,8 +136,8 @@ exposure, and the local backend process.
 
 `apps/desktop/src/preload.ts` exposes the constrained `desktopBridge`, including environment
 bootstrap, settings, SSH, updater, context menu, confirmation, external URL, and folder picker IPC.
-The current StudyFrame import dialog accepts a typed server-visible folder path; it does not invoke
-the desktop folder picker.
+The StudyFrame import dialog invokes the desktop folder picker for the primary local workflow and
+keeps a typed server-visible folder path under secondary source-material options for remote cases.
 
 ## Study Data Contract
 
@@ -386,12 +391,13 @@ Important environment variables:
 
 ## Current Review Risks
 
-- The root product has been rebranded, but inherited code paths and release automation still contain
-  `T3 Code`, `t3`, `.t3`, repository, and domain identifiers. Treat public distribution as blocked
-  until those assumptions are reviewed.
-- Folder import in the visible StudyFrame sidebar uses a typed path even though desktop IPC exposes a
-  folder picker. Verify usability and path visibility rules for local desktop, hosted web, SSH, and
-  remote environments before expanding distribution.
+- Visible desktop, web, mobile, and SSH helper copy uses the StudyFrame brand. Inherited
+  compatibility code paths and release automation still contain `T3CODE_*`, `t3`, `.t3`,
+  repository, and domain identifiers. Treat public distribution as blocked until those assumptions
+  are reviewed.
+- Folder import uses the desktop picker locally and exposes a typed server-visible path as a
+  secondary option. Verify path visibility rules for hosted web, SSH, and remote environments before
+  expanding distribution.
 - Client actions update the local store immediately and save snapshots asynchronously. Provider
   feedback and generation are also asynchronous enhancements. Review race behavior when changing
   synchronization, selection, or multi-client support.

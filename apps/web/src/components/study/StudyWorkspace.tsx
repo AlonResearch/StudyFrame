@@ -6,6 +6,7 @@ import {
   CheckCircle2Icon,
   CircleAlertIcon,
   CompassIcon,
+  EllipsisIcon,
   EyeIcon,
   FileDownIcon,
   FileTextIcon,
@@ -18,9 +19,11 @@ import {
   RotateCcwIcon,
   SigmaIcon,
   SparklesIcon,
+  XIcon,
 } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { RightPanelSheet } from "~/components/RightPanelSheet";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -33,16 +36,14 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/components/ui/menu";
 import { SidebarInset, SidebarTrigger } from "~/components/ui/sidebar";
 import { StudyAnswerInput } from "~/components/study/StudyAnswerInput";
 import { StudyMarkdown } from "~/components/study/StudyMarkdown";
 import {
   exportFinalReport,
-  exportMistakesReview,
-  exportReviewMaterial,
   exportScoreSummary,
   exportTopicPriorityReport,
-  exportTopicThread,
 } from "~/study/studyExport";
 import {
   createCompletionSummary,
@@ -74,7 +75,19 @@ import { APP_DISPLAY_NAME } from "~/branding";
 import { isElectron } from "~/env";
 import { cn } from "~/lib/utils";
 
+type StudyExtraInfoSection =
+  | "course-details"
+  | "reports"
+  | "refresher"
+  | "queue"
+  | "source-context";
+
 export function StudyWorkspace() {
+  const [extraInfo, setExtraInfo] = useState<{
+    readonly open: boolean;
+    readonly section: StudyExtraInfoSection;
+  }>({ open: false, section: "course-details" });
+
   useEffect(() => {
     installStudyFrameServerSync();
   }, []);
@@ -198,14 +211,148 @@ export function StudyWorkspace() {
     visibility: supportVisibility,
   });
   const exportName = (project?.name ?? "studyframe").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const showTopicWorkspace = topicThread !== null;
+  const openExtraInfo = (section: StudyExtraInfoSection) => {
+    setExtraInfo({ open: true, section });
+  };
+  const closeExtraInfo = () => {
+    setExtraInfo((current) => ({ ...current, open: false }));
+  };
+
+  useEffect(() => {
+    setExtraInfo({
+      open: false,
+      section: topicThread ? "refresher" : "course-details",
+    });
+  }, [selectedProjectId, topicThread]);
 
   return (
     <SidebarInset className="h-svh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground md:h-dvh">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-        <StudyHeader projectName={project?.name ?? APP_DISPLAY_NAME} />
+        <StudyHeader
+          projectName={project?.name ?? APP_DISPLAY_NAME}
+          topicSelected={showTopicWorkspace}
+          onOpenExtraInfo={openExtraInfo}
+        />
         <ScrollArea className="flex-1">
           <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-4 sm:px-6">
-            <ProjectDashboard
+            {!showTopicWorkspace ? (
+              <>
+                <LearningTracker
+                  projectSummary={projectSummary}
+                  realQuestionCount={
+                    dataset.questions.filter((question) => question.isRealQuestion).length
+                  }
+                  dueTopicCount={
+                    dataset.topicThreads.filter(
+                      (thread) =>
+                        thread.projectId === selectedProjectId &&
+                        getUnattemptedRealQuestions(dataset, attempts, thread.id).length > 0,
+                    ).length
+                  }
+                />
+
+                {dataset.topicClusters && dataset.topicClusters.length > 0 ? (
+                  <PriorityOverview
+                    clusters={dataset.topicClusters.filter(
+                      (cluster) => cluster.projectId === selectedProjectId,
+                    )}
+                    classifications={dataset.questionClassifications ?? []}
+                  />
+                ) : null}
+              </>
+            ) : (
+              <TopicWorkspace
+                activeQuestion={activeQuestion}
+                activePracticeItem={activePracticeItem}
+                activeSupport={activeSupport}
+                activeTopic={activeTopic}
+                answerDraft={answerDraft}
+                attempts={attempts}
+                generatedQuestionCount={generatedQuestions.length}
+                latestFeedback={latestFeedback}
+                latestHint={latestHint}
+                questionAttempts={
+                  activeQuestion ? getAttemptsForQuestion(attempts, activeQuestion.id) : []
+                }
+                realQuestionCount={realQuestions.length}
+                realQuestionsRemaining={unattemptedRealQuestions.length}
+                solutionSteps={
+                  supportVisibility.solutionVisible ? (activeSupport?.solutionSteps ?? []) : []
+                }
+                commonMistakes={
+                  supportVisibility.commonMistakesVisible
+                    ? (activeSupport?.commonMistakes ?? [])
+                    : []
+                }
+                solutionVisible={supportVisibility.solutionVisible}
+                topicExhausted={topicExhausted}
+                topicName={topicThread.displayName}
+                topicPriorityScore={topicThread.priorityScore}
+                topicSummaryText={topicThread.summary}
+                topicWeightedScore={topicSummary?.weightedScorePercent ?? 0}
+                weakSubtypes={topicSummary?.weakSubtypes ?? []}
+                reviewMode={reviewModeTopicThreadId === topicThread.id}
+                reviewQuestions={
+                  notPerfectRealQuestions.length > 0 ? notPerfectRealQuestions : realQuestions
+                }
+                onAnswerDraftChange={(answer) => {
+                  if (activeQuestion) setAnswerDraft(activeQuestion.id, answer);
+                }}
+                onCheckDirection={() => {
+                  if (activeQuestion) checkDirection(activeQuestion.id);
+                }}
+                onHint={() => {
+                  if (activeQuestion) requestHint(activeQuestion.id);
+                }}
+                onNext={moveToNextQuestion}
+                onRevealSolution={() => {
+                  if (activeQuestion) revealSolution(activeQuestion.id);
+                }}
+                onSubmit={() => {
+                  if (activeQuestion) submitAnswer(activeQuestion.id);
+                }}
+                getSupport={(questionId) => getQuestionSupport(dataset, questionId)}
+              />
+            )}
+          </main>
+        </ScrollArea>
+      </div>
+
+      <RightPanelSheet open={extraInfo.open} onClose={closeExtraInfo}>
+        <StudyExtraInfoDrawer
+          section={extraInfo.section}
+          topicSelected={showTopicWorkspace}
+          onClose={closeExtraInfo}
+          onSelectSection={openExtraInfo}
+        >
+          {showTopicWorkspace ? (
+            <TopicExtraInfoSection
+              section={extraInfo.section}
+              activeQuestionId={activeQuestionId}
+              attempts={attempts}
+              documentTitle={
+                activeQuestion
+                  ? (dataset.documents.find((document) => document.id === activeQuestion.documentId)
+                      ?.title ?? null)
+                  : null
+              }
+              extractionWarnings={project?.extractionWarnings ?? []}
+              generationEnabled={topicExhausted}
+              notPerfectCount={notPerfectRealQuestions.length}
+              question={activeQuestion}
+              realQuestionsRemaining={unattemptedRealQuestions.length}
+              sourceAssets={activeSourceAssets}
+              subtypeGroups={subtypeGroups}
+              supportSummary={sourceContextSupport.supportSummary}
+              expectedAnswer={sourceContextSupport.expectedAnswer}
+              topicModule={topicModule}
+              onGenerateSimilar={generateSimilarQuestions}
+              onSelectQuestion={selectQuestion}
+            />
+          ) : (
+            <CourseExtraInfoSection
+              section={extraInfo.section}
               projectSummary={projectSummary}
               sourceDocumentCount={dataset.sourceDocuments?.length ?? dataset.documents.length}
               questionCandidateCount={dataset.questionCandidates?.length ?? 0}
@@ -218,161 +365,36 @@ export function StudyWorkspace() {
               topicClusterCount={dataset.topicClusters?.length ?? dataset.topicThreads.length}
               dueTopicCount={
                 dataset.topicThreads.filter(
-                  (thread) => getUnattemptedRealQuestions(dataset, attempts, thread.id).length > 0,
+                  (thread) =>
+                    thread.projectId === selectedProjectId &&
+                    getUnattemptedRealQuestions(dataset, attempts, thread.id).length > 0,
                 ).length
               }
               warningCount={project?.extractionWarnings.length ?? 0}
+              onExportPriority={() =>
+                downloadMarkdown("topic_priority_report.md", exportTopicPriorityReport(dataset))
+              }
+              onExportSummary={() =>
+                downloadMarkdown(
+                  "score_summary.md",
+                  exportScoreSummary({
+                    dataset,
+                    attempts,
+                    projectId: selectedProjectId,
+                    topicThreadId: null,
+                  }),
+                )
+              }
+              onExportFinal={() =>
+                downloadMarkdown(
+                  `final_report_${exportName}.md`,
+                  exportFinalReport({ dataset, attempts, projectId: selectedProjectId }),
+                )
+              }
             />
-
-            {dataset.topicClusters && dataset.topicClusters.length > 0 ? (
-              <PriorityOverview
-                clusters={dataset.topicClusters.filter(
-                  (cluster) => cluster.projectId === selectedProjectId,
-                )}
-                classifications={dataset.questionClassifications ?? []}
-              />
-            ) : null}
-
-            {topicThread ? (
-              <TopicHeader
-                topicName={topicThread.displayName}
-                priorityScore={topicThread.priorityScore}
-                summary={topicThread.summary}
-                realQuestionCount={realQuestions.length}
-                attemptedRealQuestionCount={
-                  realQuestions.filter((question) => isQuestionAttempted(attempts, question.id))
-                    .length
-                }
-                generatedQuestionCount={generatedQuestions.length}
-                averageScore={topicSummary?.weightedScorePercent ?? 0}
-                weakSubtypes={topicSummary?.weakSubtypes ?? []}
-              />
-            ) : null}
-
-            {topicModule && subtypeGroups.length > 0 ? (
-              <TopicModuleOverview
-                topicModule={topicModule}
-                subtypeGroups={subtypeGroups}
-                attempts={attempts}
-                activeQuestionId={activeQuestionId}
-                onSelectQuestion={selectQuestion}
-              />
-            ) : null}
-
-            <div className="grid min-h-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-              <section className="min-w-0 rounded-lg border border-border bg-card text-card-foreground">
-                {reviewModeTopicThreadId && topicThread ? (
-                  <ReviewSolutionsPanel
-                    questions={
-                      notPerfectRealQuestions.length > 0 ? notPerfectRealQuestions : realQuestions
-                    }
-                    attempts={attempts}
-                    getSupport={(questionId) => getQuestionSupport(dataset, questionId)}
-                  />
-                ) : activeQuestion ? (
-                  <QuestionPracticePanel
-                    question={activeQuestion}
-                    subtype={activeTopic?.subtype ?? "Unclassified"}
-                    supportConfidence={activeSupport?.supportConfidence ?? 0}
-                    answerDraft={answerDraft}
-                    latestHint={latestHint}
-                    latestFeedback={latestFeedback}
-                    solutionVisible={supportVisibility.solutionVisible}
-                    solutionSteps={
-                      supportVisibility.solutionVisible ? (activeSupport?.solutionSteps ?? []) : []
-                    }
-                    commonMistakes={
-                      supportVisibility.commonMistakesVisible
-                        ? (activeSupport?.commonMistakes ?? [])
-                        : []
-                    }
-                    bestAttempt={getBestAttempt(attempts, activeQuestion.id)}
-                    attempts={getAttemptsForQuestion(attempts, activeQuestion.id)}
-                    answerInputType={activePracticeItem?.answerInputType ?? "free_text"}
-                    sourceMetadataJson={activePracticeItem?.sourceMetadataJson ?? null}
-                    onAnswerDraftChange={(answer) => setAnswerDraft(activeQuestion.id, answer)}
-                    onHint={() => requestHint(activeQuestion.id)}
-                    onCheckDirection={() => checkDirection(activeQuestion.id)}
-                    onSubmit={() => submitAnswer(activeQuestion.id)}
-                    onRevealSolution={() => revealSolution(activeQuestion.id)}
-                    onNext={moveToNextQuestion}
-                  />
-                ) : (
-                  <EmptyPracticeState topicExhausted={topicExhausted} />
-                )}
-              </section>
-
-              <aside className="min-w-0 rounded-lg border border-border bg-card text-card-foreground">
-                <SourceContextPanel
-                  question={activeQuestion}
-                  documentTitle={
-                    activeQuestion
-                      ? (dataset.documents.find(
-                          (document) => document.id === activeQuestion.documentId,
-                        )?.title ?? null)
-                      : null
-                  }
-                  supportSummary={sourceContextSupport.supportSummary}
-                  expectedAnswer={sourceContextSupport.expectedAnswer}
-                  extractionWarnings={project?.extractionWarnings ?? []}
-                  sourceAssets={activeSourceAssets}
-                  realQuestionsRemaining={unattemptedRealQuestions.length}
-                  notPerfectCount={notPerfectRealQuestions.length}
-                  generationEnabled={topicExhausted}
-                  onGenerateSimilar={generateSimilarQuestions}
-                  onExportPriority={() =>
-                    downloadMarkdown("topic_priority_report.md", exportTopicPriorityReport(dataset))
-                  }
-                  onExportSummary={() =>
-                    downloadMarkdown(
-                      "score_summary.md",
-                      exportScoreSummary({
-                        dataset,
-                        attempts,
-                        projectId: selectedProjectId,
-                        topicThreadId: topicThread?.id ?? null,
-                      }),
-                    )
-                  }
-                  onExportFinal={() =>
-                    downloadMarkdown(
-                      `final_report_${exportName}.md`,
-                      exportFinalReport({ dataset, attempts, projectId: selectedProjectId }),
-                    )
-                  }
-                  onExportTopic={
-                    topicThread
-                      ? () =>
-                          downloadMarkdown(
-                            `${exportName}-${topicThread.id}.md`,
-                            exportTopicThread({ dataset, attempts, topicThread }),
-                          )
-                      : null
-                  }
-                  onExportReviewMaterial={
-                    topicThread
-                      ? () =>
-                          downloadMarkdown(
-                            `${exportName}-${topicThread.id}-review-material.md`,
-                            exportReviewMaterial({ dataset, attempts, topicThread }),
-                          )
-                      : null
-                  }
-                  onExportMistakes={
-                    topicThread
-                      ? () =>
-                          downloadMarkdown(
-                            "mistakes_review.md",
-                            exportMistakesReview({ dataset, attempts, topicThread }),
-                          )
-                      : null
-                  }
-                />
-              </aside>
-            </div>
-          </main>
-        </ScrollArea>
-      </div>
+          )}
+        </StudyExtraInfoDrawer>
+      </RightPanelSheet>
 
       <ExhaustionDialog
         summary={exhaustionSummary}
@@ -389,36 +411,161 @@ export function StudyWorkspace() {
   );
 }
 
-function StudyHeader({ projectName }: { projectName: string }) {
+function StudyHeader({
+  projectName,
+  topicSelected,
+  onOpenExtraInfo,
+}: {
+  readonly projectName: string;
+  readonly topicSelected: boolean;
+  readonly onOpenExtraInfo: (section: StudyExtraInfoSection) => void;
+}) {
   return (
     <header
       className={cn(
         "border-b border-border px-3 sm:px-5",
         isElectron
-          ? "drag-region flex h-[52px] items-center wco:h-[env(titlebar-area-height)]"
+          ? "drag-region flex h-[52px] items-center wco:h-[env(titlebar-area-height)] wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x)+1em)]"
           : "py-2 sm:py-3",
       )}
     >
-      <div className="flex min-w-0 items-center gap-2">
-        {!isElectron ? <SidebarTrigger className="size-7 shrink-0 md:hidden" /> : null}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <SidebarTrigger className="size-7 shrink-0 [-webkit-app-region:no-drag]" />
         <span className="truncate text-sm font-medium text-foreground md:text-muted-foreground/70">
           {projectName}
         </span>
       </div>
+      <Menu>
+        <MenuTrigger
+          render={
+            <Button
+              className="size-8 shrink-0 [-webkit-app-region:no-drag]"
+              size="icon"
+              variant="ghost"
+              aria-label="Extra information"
+            />
+          }
+        >
+          <EllipsisIcon className="size-4" />
+        </MenuTrigger>
+        <MenuPopup align="end">
+          {topicSelected ? (
+            <>
+              <MenuItem onClick={() => onOpenExtraInfo("refresher")}>Refresher</MenuItem>
+              <MenuItem onClick={() => onOpenExtraInfo("queue")}>Question queue</MenuItem>
+              <MenuItem onClick={() => onOpenExtraInfo("source-context")}>Source context</MenuItem>
+            </>
+          ) : (
+            <>
+              <MenuItem onClick={() => onOpenExtraInfo("course-details")}>Course details</MenuItem>
+              <MenuItem onClick={() => onOpenExtraInfo("reports")}>Reports</MenuItem>
+            </>
+          )}
+        </MenuPopup>
+      </Menu>
     </header>
   );
 }
 
-function ProjectDashboard({
-  projectSummary,
-  sourceDocumentCount,
-  questionCandidateCount,
-  realQuestionCount,
-  generatedQuestionCount,
-  topicClusterCount,
-  dueTopicCount,
-  warningCount,
+function StudyExtraInfoDrawer({
+  section,
+  topicSelected,
+  onClose,
+  onSelectSection,
+  children,
 }: {
+  readonly section: StudyExtraInfoSection;
+  readonly topicSelected: boolean;
+  readonly onClose: () => void;
+  readonly onSelectSection: (section: StudyExtraInfoSection) => void;
+  readonly children: React.ReactNode;
+}) {
+  const sections: readonly { readonly id: StudyExtraInfoSection; readonly label: string }[] =
+    topicSelected
+      ? [
+          { id: "refresher", label: "Refresher" },
+          { id: "queue", label: "Question queue" },
+          { id: "source-context", label: "Source context" },
+        ]
+      : [
+          { id: "course-details", label: "Course details" },
+          { id: "reports", label: "Reports" },
+        ];
+  const title =
+    sections.find((candidate) => candidate.id === section)?.label ??
+    sections[0]?.label ??
+    "Extra information";
+
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-card text-card-foreground">
+      <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
+        <span className="text-sm font-semibold">{title}</span>
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          onClick={onClose}
+          aria-label="Close extra information"
+        >
+          <XIcon className="size-3.5" />
+        </Button>
+      </div>
+      <div className="border-b border-border p-2">
+        <div
+          className={cn(
+            "grid gap-1 rounded-md bg-muted/45 p-1",
+            topicSelected ? "grid-cols-3" : "grid-cols-2",
+          )}
+        >
+          {sections.map((candidate) => (
+            <Button
+              key={candidate.id}
+              size="sm"
+              variant={candidate.id === section ? "secondary" : "ghost"}
+              onClick={() => onSelectSection(candidate.id)}
+            >
+              {candidate.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+      <ScrollArea className="min-h-0 flex-1">{children}</ScrollArea>
+    </div>
+  );
+}
+
+function LearningTracker({
+  projectSummary,
+  realQuestionCount,
+  dueTopicCount,
+}: {
+  readonly projectSummary: StudyCompletionSummary;
+  readonly realQuestionCount: number;
+  readonly dueTopicCount: number;
+}) {
+  const attemptedRatio =
+    realQuestionCount === 0 ? 0 : projectSummary.realQuestionsAttempted / realQuestionCount;
+  return (
+    <section className="rounded-lg border border-border bg-card px-4 py-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold tracking-normal">Learning tracker</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {projectSummary.realQuestionsAttempted}/{realQuestionCount} real questions attempted
+          </p>
+          <ProgressBar value={attemptedRatio} className="mt-3 max-w-2xl" />
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[30rem]">
+          <CompactStat label="Weighted" value={`${projectSummary.weightedScorePercent}%`} />
+          <CompactStat label="Unweighted" value={`${projectSummary.unweightedScorePercent}%`} />
+          <CompactStat label="100%" value={projectSummary.questions100Percent} />
+          <CompactStat label="Due topics" value={dueTopicCount} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+interface CourseExtraInfoProps {
   readonly projectSummary: StudyCompletionSummary;
   readonly sourceDocumentCount: number;
   readonly questionCandidateCount: number;
@@ -427,29 +574,75 @@ function ProjectDashboard({
   readonly topicClusterCount: number;
   readonly dueTopicCount: number;
   readonly warningCount: number;
+  readonly onExportPriority: () => void;
+  readonly onExportSummary: () => void;
+  readonly onExportFinal: () => void;
+}
+
+function CourseExtraInfoSection({
+  section,
+  ...props
+}: CourseExtraInfoProps & {
+  readonly section: StudyExtraInfoSection;
 }) {
+  if (section === "reports") {
+    return (
+      <div className="p-4">
+        <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+          <FileDownIcon className="size-4" />
+          Markdown reports
+        </div>
+        <div className="grid gap-2">
+          <Button
+            className="justify-start"
+            size="sm"
+            variant="outline"
+            onClick={props.onExportPriority}
+          >
+            Topic priority
+          </Button>
+          <Button
+            className="justify-start"
+            size="sm"
+            variant="outline"
+            onClick={props.onExportSummary}
+          >
+            Score summary
+          </Button>
+          <Button
+            className="justify-start"
+            size="sm"
+            variant="outline"
+            onClick={props.onExportFinal}
+          >
+            Final report
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
+    <div className="grid gap-3 p-4 sm:grid-cols-2">
       <MetricTile
         label="Imported files"
-        value={sourceDocumentCount}
-        detail={`${questionCandidateCount} candidates`}
+        value={props.sourceDocumentCount}
+        detail={`${props.questionCandidateCount} candidates`}
       />
       <MetricTile
         label="Real questions"
-        value={realQuestionCount}
-        detail={`${projectSummary.realQuestionsAttempted} attempted`}
+        value={props.realQuestionCount}
+        detail={`${props.projectSummary.realQuestionsAttempted} attempted`}
       />
       <MetricTile
-        label="Real score"
-        value={`${projectSummary.weightedScorePercent}%`}
-        detail="weighted by detected points"
+        label="Generated"
+        value={props.generatedQuestionCount}
+        detail="separate score pool"
       />
-      <MetricTile label="Generated" value={generatedQuestionCount} detail="separate score pool" />
-      <MetricTile label="Topic clusters" value={topicClusterCount} detail="analysis output" />
-      <MetricTile label="Due topics" value={dueTopicCount} detail="real questions first" />
-      <MetricTile label="Warnings" value={warningCount} detail="extraction review" />
-    </section>
+      <MetricTile label="Topic clusters" value={props.topicClusterCount} detail="analysis output" />
+      <MetricTile label="Due topics" value={props.dueTopicCount} detail="real questions first" />
+      <MetricTile label="Warnings" value={props.warningCount} detail="extraction review" />
+    </div>
   );
 }
 
@@ -467,6 +660,23 @@ function MetricTile({
       <div className="text-xs font-medium text-muted-foreground">{label}</div>
       <div className="mt-1 text-2xl font-semibold tracking-normal">{value}</div>
       <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
+    </div>
+  );
+}
+
+function ProgressBar({
+  value,
+  className,
+}: {
+  readonly value: number;
+  readonly className?: string;
+}) {
+  return (
+    <div className={cn("h-1.5 overflow-hidden rounded-full bg-muted", className)}>
+      <div
+        className="h-full rounded-full bg-primary"
+        style={{ width: `${Math.max(0, Math.min(100, value * 100))}%` }}
+      />
     </div>
   );
 }
@@ -599,90 +809,6 @@ interface StudySubtypeGroup {
   readonly questions: readonly StudyQuestion[];
 }
 
-function TopicModuleOverview({
-  topicModule,
-  subtypeGroups,
-  attempts,
-  activeQuestionId,
-  onSelectQuestion,
-}: {
-  readonly topicModule: StudyTopicModule;
-  readonly subtypeGroups: readonly StudySubtypeGroup[];
-  readonly attempts: ReturnType<typeof useStudyFrameStore.getState>["attempts"];
-  readonly activeQuestionId: string | null;
-  readonly onSelectQuestion: (questionId: string) => void;
-}) {
-  return (
-    <section className="overflow-hidden rounded-lg border border-border bg-card">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-semibold">
-        <ListTreeIcon className="size-4" />
-        Topic module
-      </div>
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="space-y-4 p-4">
-          <section>
-            <h2 className="text-xs font-medium text-muted-foreground">Theory summary</h2>
-            <StudyMarkdown className="mt-2" content={topicModule.theorySummaryMarkdown} />
-          </section>
-          {topicModule.formulaSheetMarkdown.trim().length > 0 ? (
-            <section>
-              <h2 className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                <SigmaIcon className="size-3.5" />
-                Formula reminders
-              </h2>
-              <StudyMarkdown className="mt-2" content={topicModule.formulaSheetMarkdown} />
-            </section>
-          ) : null}
-        </div>
-        <div className="border-t border-border p-3 lg:border-t-0 lg:border-l">
-          <div className="px-1 text-xs font-medium text-muted-foreground">Real-question queue</div>
-          <div className="mt-2 space-y-3">
-            {subtypeGroups.map((group) => (
-              <section key={group.subtype}>
-                <div className="flex items-center justify-between gap-2 px-1 text-xs">
-                  <span className="truncate font-medium">{group.subtype}</span>
-                  <span className="shrink-0 text-muted-foreground">
-                    {
-                      group.questions.filter((question) =>
-                        isQuestionAttempted(attempts, question.id),
-                      ).length
-                    }
-                    /{group.questions.length}
-                  </span>
-                </div>
-                <div className="mt-1 grid gap-1">
-                  {group.questions.map((question) => {
-                    const attempted = isQuestionAttempted(attempts, question.id);
-                    const active = question.id === activeQuestionId;
-                    return (
-                      <button
-                        key={question.id}
-                        type="button"
-                        className={cn(
-                          "flex min-w-0 items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
-                          active ? "bg-accent text-accent-foreground" : "hover:bg-muted",
-                        )}
-                        onClick={() => onSelectQuestion(question.id)}
-                      >
-                        <span className="truncate">{question.sourceQuizLabel}</span>
-                        {attempted ? (
-                          <CheckCircle2Icon className="size-3.5 shrink-0 text-success-foreground" />
-                        ) : (
-                          <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function averageClassificationConfidence(
   classifications: readonly StudyQuestionClassification[],
   topicClusterId: string,
@@ -699,6 +825,325 @@ function averageClassificationConfidence(
 
 function priorityLabelText(label: StudyTopicCluster["priorityLabel"]): string {
   return label.replace("_", " ");
+}
+
+function TopicWorkspace({
+  activeQuestion,
+  activePracticeItem,
+  activeSupport,
+  activeTopic,
+  answerDraft,
+  attempts,
+  generatedQuestionCount,
+  getSupport,
+  latestFeedback,
+  latestHint,
+  questionAttempts,
+  realQuestionCount,
+  realQuestionsRemaining,
+  reviewMode,
+  reviewQuestions,
+  solutionSteps,
+  commonMistakes,
+  solutionVisible,
+  topicExhausted,
+  topicName,
+  topicPriorityScore,
+  topicSummaryText,
+  topicWeightedScore,
+  weakSubtypes,
+  onAnswerDraftChange,
+  onCheckDirection,
+  onHint,
+  onNext,
+  onRevealSolution,
+  onSubmit,
+}: {
+  readonly activeQuestion: StudyQuestion | null;
+  readonly activePracticeItem: {
+    readonly answerInputType: StudyAnswerInputType;
+    readonly sourceMetadataJson: unknown;
+  } | null;
+  readonly activeSupport: ReturnType<typeof getQuestionSupport>;
+  readonly activeTopic: ReturnType<typeof getQuestionTopic>;
+  readonly answerDraft: string;
+  readonly attempts: readonly StudyAttempt[];
+  readonly generatedQuestionCount: number;
+  readonly getSupport: (questionId: string) => ReturnType<typeof getQuestionSupport>;
+  readonly latestFeedback:
+    | ReturnType<typeof useStudyFrameStore.getState>["latestFeedbackByQuestionId"][string]
+    | undefined;
+  readonly latestHint: string | undefined;
+  readonly questionAttempts: readonly StudyAttempt[];
+  readonly realQuestionCount: number;
+  readonly realQuestionsRemaining: number;
+  readonly reviewMode: boolean;
+  readonly reviewQuestions: readonly StudyQuestion[];
+  readonly solutionSteps: readonly string[];
+  readonly commonMistakes: readonly string[];
+  readonly solutionVisible: boolean;
+  readonly topicExhausted: boolean;
+  readonly topicName: string;
+  readonly topicPriorityScore: number;
+  readonly topicSummaryText: string;
+  readonly topicWeightedScore: number;
+  readonly weakSubtypes: readonly string[];
+  readonly onAnswerDraftChange: (answer: string) => void;
+  readonly onCheckDirection: () => void;
+  readonly onHint: () => void;
+  readonly onNext: () => void;
+  readonly onRevealSolution: () => void;
+  readonly onSubmit: () => void;
+}) {
+  const attemptedRealQuestionCount = realQuestionCount - realQuestionsRemaining;
+  return (
+    <>
+      <TopicHeader
+        topicName={topicName}
+        priorityScore={topicPriorityScore}
+        summary={topicSummaryText}
+        realQuestionCount={realQuestionCount}
+        attemptedRealQuestionCount={attemptedRealQuestionCount}
+        generatedQuestionCount={generatedQuestionCount}
+        averageScore={topicWeightedScore}
+        weakSubtypes={weakSubtypes}
+      />
+
+      <div className="grid min-h-0 grid-cols-1 gap-4">
+        <section className="min-w-0 rounded-lg border border-border bg-card text-card-foreground">
+          {reviewMode ? (
+            <ReviewSolutionsPanel
+              questions={reviewQuestions}
+              attempts={attempts}
+              getSupport={getSupport}
+            />
+          ) : activeQuestion ? (
+            <QuestionPracticePanel
+              question={activeQuestion}
+              subtype={activeTopic?.subtype ?? "Unclassified"}
+              supportConfidence={activeSupport?.supportConfidence ?? 0}
+              answerDraft={answerDraft}
+              latestHint={latestHint}
+              latestFeedback={latestFeedback}
+              solutionVisible={solutionVisible}
+              solutionSteps={solutionSteps}
+              commonMistakes={commonMistakes}
+              bestAttempt={getBestAttempt(attempts, activeQuestion.id)}
+              attempts={questionAttempts}
+              answerInputType={activePracticeItem?.answerInputType ?? "free_text"}
+              sourceMetadataJson={activePracticeItem?.sourceMetadataJson ?? null}
+              onAnswerDraftChange={onAnswerDraftChange}
+              onHint={onHint}
+              onCheckDirection={onCheckDirection}
+              onSubmit={onSubmit}
+              onRevealSolution={onRevealSolution}
+              onNext={onNext}
+            />
+          ) : (
+            <EmptyPracticeState topicExhausted={topicExhausted} />
+          )}
+        </section>
+      </div>
+    </>
+  );
+}
+
+function TopicExtraInfoSection({
+  section,
+  activeQuestionId,
+  attempts,
+  documentTitle,
+  extractionWarnings,
+  expectedAnswer,
+  generationEnabled,
+  notPerfectCount,
+  question,
+  realQuestionsRemaining,
+  sourceAssets,
+  subtypeGroups,
+  supportSummary,
+  topicModule,
+  onGenerateSimilar,
+  onSelectQuestion,
+}: {
+  readonly section: StudyExtraInfoSection;
+  readonly activeQuestionId: string | null;
+  readonly attempts: readonly StudyAttempt[];
+  readonly documentTitle: string | null;
+  readonly extractionWarnings: readonly string[];
+  readonly expectedAnswer: readonly string[];
+  readonly generationEnabled: boolean;
+  readonly notPerfectCount: number;
+  readonly question: StudyQuestion | null;
+  readonly realQuestionsRemaining: number;
+  readonly sourceAssets: readonly StudySourceAsset[];
+  readonly subtypeGroups: readonly StudySubtypeGroup[];
+  readonly supportSummary: string | null;
+  readonly topicModule: StudyTopicModule | null;
+  readonly onGenerateSimilar: () => void;
+  readonly onSelectQuestion: (questionId: string) => void;
+}) {
+  if (section === "source-context") {
+    return (
+      <SourceContextPanel
+        question={question}
+        documentTitle={documentTitle}
+        supportSummary={supportSummary}
+        expectedAnswer={expectedAnswer}
+        extractionWarnings={extractionWarnings}
+        sourceAssets={sourceAssets}
+      />
+    );
+  }
+
+  if (section === "queue") {
+    return (
+      <TopicQueuePanel
+        activeQuestionId={activeQuestionId}
+        attempts={attempts}
+        generationEnabled={generationEnabled}
+        notPerfectCount={notPerfectCount}
+        realQuestionsRemaining={realQuestionsRemaining}
+        subtypeGroups={subtypeGroups}
+        topicModule={null}
+        onGenerateSimilar={onGenerateSimilar}
+        onSelectQuestion={onSelectQuestion}
+      />
+    );
+  }
+
+  return <TopicRefresherPanel topicModule={topicModule} />;
+}
+
+function TopicRefresherPanel({ topicModule }: { readonly topicModule: StudyTopicModule | null }) {
+  if (!topicModule) {
+    return <div className="p-4 text-sm text-muted-foreground">No refresher is available yet.</div>;
+  }
+  return (
+    <div className="space-y-4 p-4 text-sm">
+      <section>
+        <h2 className="text-xs font-medium text-muted-foreground">Theory summary</h2>
+        <StudyMarkdown className="mt-2" content={topicModule.theorySummaryMarkdown} />
+      </section>
+      {topicModule.formulaSheetMarkdown.trim().length > 0 ? (
+        <section>
+          <h2 className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <SigmaIcon className="size-3.5" />
+            Formula reminders
+          </h2>
+          <StudyMarkdown className="mt-2" content={topicModule.formulaSheetMarkdown} />
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function TopicQueuePanel({
+  activeQuestionId,
+  attempts,
+  generationEnabled,
+  notPerfectCount,
+  realQuestionsRemaining,
+  subtypeGroups,
+  topicModule,
+  onGenerateSimilar,
+  onSelectQuestion,
+}: {
+  readonly activeQuestionId: string | null;
+  readonly attempts: readonly StudyAttempt[];
+  readonly generationEnabled: boolean;
+  readonly notPerfectCount: number;
+  readonly realQuestionsRemaining: number;
+  readonly subtypeGroups: readonly StudySubtypeGroup[];
+  readonly topicModule: StudyTopicModule | null;
+  readonly onGenerateSimilar: () => void;
+  readonly onSelectQuestion: (questionId: string) => void;
+}) {
+  return (
+    <div className="flex flex-1 flex-col gap-4 p-4 text-sm">
+      {topicModule ? (
+        <div className="space-y-4">
+          <section>
+            <h2 className="text-xs font-medium text-muted-foreground">Theory summary</h2>
+            <StudyMarkdown className="mt-2" content={topicModule.theorySummaryMarkdown} />
+          </section>
+          {topicModule.formulaSheetMarkdown.trim().length > 0 ? (
+            <section>
+              <h2 className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <SigmaIcon className="size-3.5" />
+                Formula reminders
+              </h2>
+              <StudyMarkdown className="mt-2" content={topicModule.formulaSheetMarkdown} />
+            </section>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="rounded-lg border border-border bg-background/65 p-3">
+        <div className="grid grid-cols-2 gap-2">
+          <CompactStat label="Unattempted" value={realQuestionsRemaining} />
+          <CompactStat label="Not 100%" value={notPerfectCount} />
+        </div>
+        <Button
+          className="mt-3 w-full justify-start"
+          size="sm"
+          variant="outline"
+          disabled={!generationEnabled}
+          onClick={onGenerateSimilar}
+        >
+          <SparklesIcon className="size-4" />
+          Generate similar questions
+        </Button>
+      </div>
+
+      <div>
+        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <ListTreeIcon className="size-3.5" />
+          Real-question queue
+        </div>
+        <div className="mt-2 space-y-3">
+          {subtypeGroups.map((group) => (
+            <section key={group.subtype}>
+              <div className="flex items-center justify-between gap-2 px-1 text-xs">
+                <span className="truncate font-medium">{group.subtype}</span>
+                <span className="shrink-0 text-muted-foreground">
+                  {
+                    group.questions.filter((question) => isQuestionAttempted(attempts, question.id))
+                      .length
+                  }
+                  /{group.questions.length}
+                </span>
+              </div>
+              <div className="mt-1 grid gap-1">
+                {group.questions.map((question) => {
+                  const attempted = isQuestionAttempted(attempts, question.id);
+                  const active = question.id === activeQuestionId;
+                  return (
+                    <button
+                      key={question.id}
+                      type="button"
+                      className={cn(
+                        "flex min-w-0 items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+                        active ? "bg-accent text-accent-foreground" : "hover:bg-muted",
+                      )}
+                      onClick={() => onSelectQuestion(question.id)}
+                    >
+                      <span className="truncate">{question.sourceQuizLabel}</span>
+                      {attempted ? (
+                        <CheckCircle2Icon className="size-3.5 shrink-0 text-success-foreground" />
+                      ) : (
+                        <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function CompactStat({
@@ -988,16 +1433,6 @@ function SourceContextPanel({
   expectedAnswer,
   extractionWarnings,
   sourceAssets,
-  realQuestionsRemaining,
-  notPerfectCount,
-  generationEnabled,
-  onGenerateSimilar,
-  onExportPriority,
-  onExportSummary,
-  onExportFinal,
-  onExportTopic,
-  onExportReviewMaterial,
-  onExportMistakes,
 }: {
   readonly question: StudyQuestion | null;
   readonly documentTitle: string | null;
@@ -1005,133 +1440,52 @@ function SourceContextPanel({
   readonly expectedAnswer: readonly string[];
   readonly extractionWarnings: readonly string[];
   readonly sourceAssets: readonly StudySourceAsset[];
-  readonly realQuestionsRemaining: number;
-  readonly notPerfectCount: number;
-  readonly generationEnabled: boolean;
-  readonly onGenerateSimilar: () => void;
-  readonly onExportPriority: () => void;
-  readonly onExportSummary: () => void;
-  readonly onExportFinal: () => void;
-  readonly onExportTopic: (() => void) | null;
-  readonly onExportReviewMaterial: (() => void) | null;
-  readonly onExportMistakes: (() => void) | null;
 }) {
   return (
-    <div className="flex h-full min-h-[34rem] flex-col">
-      <div className="border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <FileTextIcon className="size-4" />
-          Source context
-        </div>
+    <div className="flex flex-1 flex-col gap-4 p-4 text-sm">
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <FileTextIcon className="size-4" />
+        Source context
       </div>
-      <div className="flex flex-1 flex-col gap-4 p-4 text-sm">
-        {question ? (
-          <>
-            <ContextRow label="Document" value={documentTitle ?? question.documentId} />
-            <ContextRow label="Anchor" value={question.sourceAnchor} />
-            <ContextRow
-              label="Extraction"
-              value={`${Math.round(question.extractionConfidence * 100)}% confidence`}
-            />
-            {supportSummary ? (
-              <div>
-                <div className="text-xs font-medium text-muted-foreground">Question support</div>
-                <p className="mt-1 leading-relaxed">{supportSummary}</p>
+      {question ? (
+        <>
+          <ContextRow label="Document" value={documentTitle ?? question.documentId} />
+          <ContextRow label="Anchor" value={question.sourceAnchor} />
+          <ContextRow
+            label="Extraction"
+            value={`${Math.round(question.extractionConfidence * 100)}% confidence`}
+          />
+          {supportSummary ? (
+            <div>
+              <div className="text-xs font-medium text-muted-foreground">Question support</div>
+              <p className="mt-1 leading-relaxed">{supportSummary}</p>
+            </div>
+          ) : null}
+          {expectedAnswer.length > 0 ? (
+            <div>
+              <div className="text-xs font-medium text-muted-foreground">
+                Expected answer markers
               </div>
-            ) : null}
-            {expectedAnswer.length > 0 ? (
-              <div>
-                <div className="text-xs font-medium text-muted-foreground">
-                  Expected answer markers
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {expectedAnswer.map((answer) => (
-                    <Badge key={answer} variant="outline">
-                      {answer}
-                    </Badge>
-                  ))}
-                </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {expectedAnswer.map((answer) => (
+                  <Badge key={answer} variant="outline">
+                    {answer}
+                  </Badge>
+                ))}
               </div>
-            ) : null}
-            {sourceAssets.length > 0 ? <SourceAssetList assets={sourceAssets} /> : null}
-          </>
-        ) : (
-          <div className="text-muted-foreground">Select a topic question.</div>
-        )}
+            </div>
+          ) : null}
+          {sourceAssets.length > 0 ? <SourceAssetList assets={sourceAssets} /> : null}
+        </>
+      ) : (
+        <div className="text-muted-foreground">Select a topic question.</div>
+      )}
 
-        <div className="mt-auto rounded-lg border border-border bg-background/65 p-3">
-          <div className="grid grid-cols-2 gap-2">
-            <CompactStat label="Unattempted" value={realQuestionsRemaining} />
-            <CompactStat label="Not 100%" value={notPerfectCount} />
-          </div>
-          <Button
-            className="mt-3 w-full justify-start"
-            size="sm"
-            variant="outline"
-            disabled={!generationEnabled}
-            onClick={onGenerateSimilar}
-          >
-            <SparklesIcon className="size-4" />
-            Generate similar questions
-          </Button>
+      {extractionWarnings.length > 0 ? (
+        <div className="rounded-lg border border-warning/20 bg-warning/8 px-3 py-2 text-xs text-warning-foreground">
+          {extractionWarnings[0]}
         </div>
-
-        <div className="rounded-lg border border-border bg-background/65 p-3">
-          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <FileDownIcon className="size-3.5" />
-            Markdown exports
-          </div>
-          <div className="grid gap-2">
-            <Button
-              className="justify-start"
-              size="sm"
-              variant="outline"
-              onClick={onExportPriority}
-            >
-              Topic priority
-            </Button>
-            <Button className="justify-start" size="sm" variant="outline" onClick={onExportSummary}>
-              Score summary
-            </Button>
-            <Button className="justify-start" size="sm" variant="outline" onClick={onExportFinal}>
-              Final report
-            </Button>
-            <Button
-              className="justify-start"
-              size="sm"
-              variant="outline"
-              disabled={!onExportTopic}
-              onClick={onExportTopic ?? undefined}
-            >
-              Topic thread
-            </Button>
-            <Button
-              className="justify-start"
-              size="sm"
-              variant="outline"
-              disabled={!onExportReviewMaterial}
-              onClick={onExportReviewMaterial ?? undefined}
-            >
-              Review material
-            </Button>
-            <Button
-              className="justify-start"
-              size="sm"
-              variant="outline"
-              disabled={!onExportMistakes}
-              onClick={onExportMistakes ?? undefined}
-            >
-              Mistakes review
-            </Button>
-          </div>
-        </div>
-
-        {extractionWarnings.length > 0 ? (
-          <div className="rounded-lg border border-warning/20 bg-warning/8 px-3 py-2 text-xs text-warning-foreground">
-            {extractionWarnings[0]}
-          </div>
-        ) : null}
-      </div>
+      ) : null}
     </div>
   );
 }

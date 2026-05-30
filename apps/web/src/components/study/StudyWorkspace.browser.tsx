@@ -4,7 +4,7 @@ import { page } from "vitest/browser";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "vitest-browser-react";
 
-import { SidebarProvider } from "~/components/ui/sidebar";
+import { Sidebar, SidebarProvider } from "~/components/ui/sidebar";
 import { studySeedData } from "~/study/studySeedData";
 import { useStudyFrameStore } from "~/study/studyStore";
 import { StudySidebar } from "./StudySidebar";
@@ -14,8 +14,13 @@ vi.mock("~/study/studyServerSync", () => ({
   installStudyFrameServerSync: () => () => {},
 }));
 
-vi.mock("@tanstack/react-router", () => ({
+vi.mock("@tanstack/react-router", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tanstack/react-router")>()),
   Link: ({ children }: { readonly children: React.ReactNode }) => <a>{children}</a>,
+  useLocation: (opts?: { select?: (location: { pathname: string }) => unknown }) => {
+    const location = { pathname: "/" };
+    return opts?.select ? opts.select(location) : location;
+  },
 }));
 
 describe("StudyWorkspace", () => {
@@ -50,16 +55,45 @@ describe("StudyWorkspace", () => {
     );
   }
 
-  it("shows the prioritized real-question workspace without leaking answers", async () => {
+  async function openSpikeTrainTopic() {
+    useStudyFrameStore.getState().selectTopicThread("topic-spike-train-statistics");
+    await renderWorkspace();
+  }
+
+  async function openExtraInfoSection(name: string) {
+    await page.getByRole("button", { name: "Extra information", exact: true }).click();
+    await page.getByRole("menuitem", { name, exact: true }).click();
+  }
+
+  it("starts on the course dashboard with learning tracker and priority statistics", async () => {
     await renderWorkspace();
 
     await expect
+      .element(page.getByRole("heading", { name: "Learning tracker" }))
+      .toBeInTheDocument();
+    await expect
       .element(page.getByText("Topic priority", { exact: true }).first())
       .toBeInTheDocument();
-    await expect.element(page.getByText("Theory summary", { exact: true })).toBeInTheDocument();
+    await expect
+      .element(page.getByRole("heading", { name: "Spike-train statistics", exact: true }))
+      .not.toBeInTheDocument();
     await expect
       .element(page.getByText("Real-question queue", { exact: true }))
-      .toBeInTheDocument();
+      .not.toBeInTheDocument();
+    await expect
+      .element(page.getByRole("button", { name: "Close extra information", exact: true }))
+      .not.toBeInTheDocument();
+  });
+
+  it("shows the streamlined topic workspace without leaking answers", async () => {
+    await openSpikeTrainTopic();
+
+    await expect
+      .element(page.getByText("Real-question queue", { exact: true }))
+      .not.toBeInTheDocument();
+    await expect
+      .element(page.getByText("Topic priority", { exact: true }).first())
+      .not.toBeInTheDocument();
     await expect
       .element(page.getByRole("heading", { name: "Spike-train statistics", exact: true }))
       .toBeInTheDocument();
@@ -69,7 +103,16 @@ describe("StudyWorkspace", () => {
     await expect
       .element(page.getByText("2024.pdf#page=3&q=2", { exact: true }).first())
       .toBeInTheDocument();
-    await expect.element(page.getByText("96% confidence", { exact: true })).toBeInTheDocument();
+    await expect
+      .element(page.getByRole("button", { name: "Generate similar questions", exact: true }))
+      .not.toBeInTheDocument();
+
+    await openExtraInfoSection("Refresher");
+    await expect.element(page.getByText("Theory summary", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Question queue", exact: true }).click();
+    await expect
+      .element(page.getByText("Real-question queue", { exact: true }))
+      .toBeInTheDocument();
     await expect
       .element(page.getByRole("button", { name: "Generate similar questions", exact: true }))
       .toBeDisabled();
@@ -82,6 +125,11 @@ describe("StudyWorkspace", () => {
     await expect.element(page.getByText("Solution", { exact: true })).not.toBeInTheDocument();
     await expect.element(page.getByText("16 Hz", { exact: true })).not.toBeInTheDocument();
 
+    await page.getByRole("button", { name: "Source context", exact: true }).click();
+    await expect.element(page.getByText("96% confidence", { exact: true })).toBeInTheDocument();
+    await page.getByRole("button", { name: "Question queue", exact: true }).click();
+    await page.getByRole("button", { name: "Close extra information", exact: true }).click();
+
     await page.getByRole("button", { name: "Hint", exact: true }).click();
     await expect
       .element(page.getByText("Start by converting the observation window into seconds."))
@@ -93,8 +141,25 @@ describe("StudyWorkspace", () => {
     await expect.element(page.getByText(/16 Hz/).first()).toBeInTheDocument();
   });
 
+  it("keeps source context behind the right metadata tab", async () => {
+    await openSpikeTrainTopic();
+
+    await expect
+      .element(page.getByRole("button", { name: "Close extra information", exact: true }))
+      .not.toBeInTheDocument();
+    await openExtraInfoSection("Source context");
+    await expect.element(page.getByText("96% confidence", { exact: true })).toBeVisible();
+    await expect
+      .element(page.getByText("Question support", { exact: true }))
+      .not.toBeInTheDocument();
+    await page.getByRole("button", { name: "Close extra information", exact: true }).click();
+    await expect
+      .element(page.getByRole("button", { name: "Close extra information", exact: true }))
+      .not.toBeInTheDocument();
+  });
+
   it("supports direction checks, submission feedback, and attempt history", async () => {
-    await renderWorkspace();
+    await openSpikeTrainTopic();
 
     await page
       .getByPlaceholder("Work the real question here...")
@@ -111,12 +176,16 @@ describe("StudyWorkspace", () => {
     await expect.element(page.getByText("Best 100%", { exact: true })).toBeInTheDocument();
     await expect
       .element(page.getByText("Expected answer markers", { exact: true }))
-      .toBeInTheDocument();
+      .not.toBeInTheDocument();
     await expect.element(page.getByText("Solution", { exact: true })).toBeInTheDocument();
+    await openExtraInfoSection("Source context");
+    await expect
+      .element(page.getByText("Expected answer markers", { exact: true }))
+      .toBeInTheDocument();
   });
 
   it("unlocks generated practice only after all real questions are attempted", async () => {
-    await renderWorkspace();
+    await openSpikeTrainTopic();
 
     await page.getByRole("button", { name: "Reveal solution", exact: true }).click();
     await page.getByRole("button", { name: "Next", exact: true }).click();
@@ -143,7 +212,7 @@ describe("StudyWorkspace", () => {
   });
 
   it("offers a solution-review mode after exhausting real questions", async () => {
-    await renderWorkspace();
+    await openSpikeTrainTopic();
 
     await page.getByRole("button", { name: "Reveal solution", exact: true }).click();
     await page.getByRole("button", { name: "Next", exact: true }).click();
@@ -164,14 +233,12 @@ describe("StudyWorkspace", () => {
     await renderWorkspace();
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
+    await openExtraInfoSection("Reports");
     await page.getByRole("button", { name: "Topic priority", exact: true }).click();
     await page.getByRole("button", { name: "Score summary", exact: true }).click();
     await page.getByRole("button", { name: "Final report", exact: true }).click();
-    await page.getByRole("button", { name: "Topic thread", exact: true }).click();
-    await page.getByRole("button", { name: "Review material", exact: true }).click();
-    await page.getByRole("button", { name: "Mistakes review", exact: true }).click();
 
-    expect(clickSpy).toHaveBeenCalledTimes(6);
+    expect(clickSpy).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -198,18 +265,56 @@ describe("StudySidebar", () => {
     document.body.innerHTML = "";
   });
 
-  it("imports example course JSON and resets demo progress", async () => {
+  async function renderSidebar() {
     mounted = await render(
       <SidebarProvider>
-        <StudySidebar />
+        <Sidebar collapsible="none">
+          <StudySidebar />
+        </Sidebar>
       </SidebarProvider>,
     );
+  }
+
+  it("collapses courses smoothly while keeping the active topic available", async () => {
+    await renderSidebar();
+
+    await expect.element(page.getByText("Spike-train statistics", { exact: true })).toBeVisible();
+    await page.getByText("Information theory", { exact: true }).click();
+    await page
+      .getByRole("button", { name: "Collapse Signal and Data Analysis", exact: true })
+      .click();
+    await expect
+      .element(page.getByRole("button", { name: "Expand Signal and Data Analysis", exact: true }))
+      .toBeInTheDocument();
+    await expect.element(page.getByText("Information theory", { exact: true })).toBeVisible();
+    await expect
+      .element(page.getByText("Spike-train statistics", { exact: true }))
+      .not.toBeInTheDocument();
+
+    await page
+      .getByRole("button", { name: "Expand Signal and Data Analysis", exact: true })
+      .click();
+    await expect.element(page.getByText("Spike-train statistics", { exact: true })).toBeVisible();
+
+    await page.getByText("Information theory", { exact: true }).click();
+    expect(useStudyFrameStore.getState().selectedTopicThreadId).toBe("topic-information-theory");
+  });
+
+  it("imports example course JSON and resets demo progress", async () => {
+    await renderSidebar();
 
     await page.getByRole("button", { name: "Import course", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Import course" });
     await expect.element(dialog).toBeInTheDocument();
+    await expect
+      .element(dialog.getByRole("button", { name: "Open folder", exact: true }))
+      .toBeInTheDocument();
+    await expect
+      .element(dialog.getByRole("button", { name: "Check priorities", exact: true }))
+      .toBeDisabled();
+    await dialog.getByRole("button", { name: "Source material options", exact: true }).click();
     await dialog.getByRole("button", { name: "Example", exact: true }).click();
-    await dialog.getByRole("button", { name: "Import", exact: true }).click();
+    await dialog.getByRole("button", { name: "Import JSON", exact: true }).click();
     await expect.element(page.getByText("Imported Course", { exact: true })).toBeInTheDocument();
 
     await page.getByRole("button", { name: "Reset demo progress", exact: true }).click();

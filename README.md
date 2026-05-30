@@ -47,14 +47,17 @@ StudyFrame combines:
 - **Problem-based learning:** the student learns by solving representative real problems.
 - **Brief concept refreshers:** each topic begins with the minimum theory and formulas needed to start solving.
 
-Opening a topic should immediately show:
+Opening a topic should immediately show the focused problem-solving workspace. A contextual
+extra-information drawer, opened from the page menu only when needed, should provide:
 
 1. A short theory summary.
 2. Relevant formulas or reminders.
 3. Subtopics and progress.
 4. A queue of real past questions.
-5. A focused answer area with hint, direction-check, submit, reveal, and next actions.
-6. Source context in a drawer when needed.
+
+The main workspace should provide a focused answer area with hint, direction-check, submit, reveal,
+and next actions. Source context belongs in the same extra-information drawer so it stays available
+without disturbing the solving flow.
 
 After the real questions are exhausted, offer:
 
