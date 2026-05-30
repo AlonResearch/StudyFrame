@@ -9,7 +9,6 @@ import type {
   StudySourceFileType,
   StudyTopicCluster,
   StudyTopicModule,
-  StudyTopicThread,
 } from "./studyTypes";
 
 type StudyDomainCollections = Pick<
@@ -36,7 +35,8 @@ export function withDerivedStudyDomainModel(dataset: StudyDatasetWithOptionalDom
     dataset.questionClassifications ?? deriveQuestionClassifications(dataset);
   const topicModules = dataset.topicModules ?? deriveTopicModules(dataset, topicClusters);
   const practiceItems =
-    dataset.practiceItems ?? derivePracticeItems(dataset, questionCandidates, topicModules);
+    dataset.practiceItems ??
+    derivePracticeItems(dataset, questionCandidates, topicClusters, topicModules);
   const practiceSupport =
     dataset.practiceSupport ?? derivePracticeSupport(dataset.questionSupport, practiceItems);
 
@@ -51,6 +51,15 @@ export function withDerivedStudyDomainModel(dataset: StudyDatasetWithOptionalDom
     practiceItems,
     practiceSupport,
   };
+}
+
+export function withRegeneratedStudyPracticeModel(dataset: StudyDataset): StudyDataset {
+  const {
+    practiceItems: _practiceItems,
+    practiceSupport: _practiceSupport,
+    ...withoutPractice
+  } = dataset;
+  return withDerivedStudyDomainModel(withoutPractice);
 }
 
 function deriveSourceDocuments(dataset: Pick<StudyDataset, "documents">): StudySourceDocument[] {
@@ -172,13 +181,25 @@ function deriveTopicModules(
 }
 
 function derivePracticeItems(
-  dataset: Pick<StudyDataset, "questions" | "questionTopics">,
+  dataset: Pick<StudyDataset, "questions" | "questionTopics" | "topicThreads">,
   questionCandidates: readonly StudyQuestionCandidate[],
+  topicClusters: readonly StudyTopicCluster[],
   topicModules: readonly StudyTopicModule[],
 ): StudyPracticeItem[] {
-  const candidateIds = new Set(questionCandidates.map((candidate) => candidate.id));
+  const candidateBySource = new Map(
+    questionCandidates.map((candidate) => [sourceKey(candidate), candidate]),
+  );
   const moduleByThreadId = new Map(
-    topicModules.map((module) => [threadIdFromModuleId(module.id), module]),
+    dataset.topicThreads.flatMap((thread) => {
+      const cluster = topicClusters.find(
+        (candidate) =>
+          candidate.projectId === thread.projectId && candidate.displayName === thread.displayName,
+      );
+      const module =
+        topicModules.find((candidate) => candidate.topicClusterId === cluster?.id) ??
+        topicModules.find((candidate) => threadIdFromModuleId(candidate.id) === thread.id);
+      return module ? [[thread.id, module] as const] : [];
+    }),
   );
 
   return dataset.questions.flatMap((question) => {
@@ -186,20 +207,19 @@ function derivePracticeItems(
     if (!classification) return [];
     const module = moduleByThreadId.get(classification.topicThreadId);
     if (!module) return [];
-    const candidateId = questionCandidateId(question.id);
+    const candidate = candidateBySource.get(sourceKey(question));
     return [
       {
         id: practiceItemId(question.id),
         projectId: question.projectId,
         topicModuleId: module.id,
-        sourceQuestionCandidateId:
-          question.isRealQuestion && candidateIds.has(candidateId) ? candidateId : null,
+        sourceQuestionCandidateId: question.isRealQuestion ? (candidate?.id ?? null) : null,
         itemOrigin: question.isRealQuestion ? "real_question" : "generated_variant",
         subtype: classification.subtype,
         promptMarkdown: question.rawPrompt,
         answerInputType: "free_text",
         pointValue: question.pointValue,
-        assetIds: [],
+        assetIds: candidate?.assetIds ?? [],
         sourceMetadataJson: {
           sourceAnchor: question.sourceAnchor,
           sourceQuizLabel: question.sourceQuizLabel,
@@ -303,4 +323,8 @@ function threadIdFromModuleId(moduleId: string): string {
 
 function questionIdFromPracticeItemId(itemId: string): string {
   return itemId.replace(/^practice-/, "");
+}
+
+function sourceKey(input: Pick<StudyQuestionCandidate, "documentId" | "sourceAnchor">): string {
+  return `${input.documentId}\0${input.sourceAnchor}`;
 }

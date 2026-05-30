@@ -125,8 +125,11 @@ export function StudyWorkspace() {
         )
       : null;
   const activePracticeItem =
-    dataset.practiceItems?.find((item) => item.sourceQuestionCandidateId === activeCandidate?.id) ??
-    null;
+    dataset.practiceItems?.find(
+      (item) =>
+        item.id === `practice-${activeQuestion?.id}` ||
+        item.sourceQuestionCandidateId === activeCandidate?.id,
+    ) ?? null;
   const activeSourceAssets = activeCandidate
     ? (dataset.sourceAssets ?? []).filter((asset) => activeCandidate.assetIds.includes(asset.id))
     : [];

@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { randomUUID } from "~/lib/utils";
-import { withDerivedStudyDomainModel } from "./studyDomainModel";
+import { withDerivedStudyDomainModel, withRegeneratedStudyPracticeModel } from "./studyDomainModel";
 import {
   checkDirection,
   createCompletionSummary,
@@ -375,12 +375,12 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
         };
 
         set({
-          dataset: {
+          dataset: withRegeneratedStudyPracticeModel({
             ...state.dataset,
             questions: [...state.dataset.questions, ...generatedQuestions],
             questionTopics: [...state.dataset.questionTopics, ...generatedTopics],
             questionSupport: [...state.dataset.questionSupport, ...generatedSupport],
-          },
+          }),
           generatedQuestionBatches: [...state.generatedQuestionBatches, batch],
           activeQuestionId: generatedQuestions[0]?.id ?? state.activeQuestionId,
           exhaustionSummaryId: null,
