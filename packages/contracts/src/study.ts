@@ -365,3 +365,25 @@ export const StudyFrameSnapshotResponse = Schema.Struct({
   snapshot: Schema.NullOr(StudyFrameSnapshot),
 });
 export type StudyFrameSnapshotResponse = typeof StudyFrameSnapshotResponse.Type;
+
+export const StudyImportFolderInput = Schema.Struct({
+  projectId: Schema.optionalKey(Schema.String),
+  sourceRoot: Schema.String,
+});
+export type StudyImportFolderInput = typeof StudyImportFolderInput.Type;
+
+export const StudyExtractionResult = Schema.Struct({
+  projectId: Schema.String,
+  sourceRoot: Schema.String,
+  importedDocumentCount: Schema.Number,
+  sourceAssetCount: Schema.Number,
+  questionCandidateCount: Schema.Number,
+  warnings: Schema.Array(Schema.String),
+});
+export type StudyExtractionResult = typeof StudyExtractionResult.Type;
+
+export const StudyImportFolderResponse = Schema.Struct({
+  snapshot: StudyFrameSnapshot,
+  result: StudyExtractionResult,
+});
+export type StudyImportFolderResponse = typeof StudyImportFolderResponse.Type;

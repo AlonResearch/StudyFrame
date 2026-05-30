@@ -1,4 +1,4 @@
-import { StudyFrameSnapshot } from "@t3tools/contracts";
+import { StudyFrameSnapshot, StudyImportFolderInput } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
@@ -8,6 +8,7 @@ import { AuthError, ServerAuth } from "../auth/Services/ServerAuth.ts";
 import type { PersistenceDecodeError, PersistenceSqlError } from "../persistence/Errors.ts";
 import { StudyFrameRepository } from "../persistence/Services/StudyFrame.ts";
 import { browserApiCorsHeaders } from "../httpCors.ts";
+import { importFolderToSnapshot } from "./importFolder.ts";
 
 function respondToPersistenceError(error: PersistenceSqlError | PersistenceDecodeError) {
   return Effect.gen(function* () {
@@ -73,6 +74,50 @@ export const studyFrameSnapshotPutRouteLayer = HttpRouter.add(
       { ok: true },
       { status: 200, headers: browserApiCorsHeaders },
     );
+  }).pipe(
+    Effect.catchTag("AuthError", (error) => respondToAuthError(error)),
+    Effect.catchTags({
+      PersistenceDecodeError: (error) => respondToPersistenceError(error),
+      PersistenceSqlError: (error) => respondToPersistenceError(error),
+    }),
+  ),
+);
+
+export const studyFrameImportFolderRouteLayer = HttpRouter.add(
+  "POST",
+  "/api/studyframe/import-folder",
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const serverAuth = yield* ServerAuth;
+    yield* serverAuth.authenticateHttpRequest(request);
+
+    const input = yield* HttpServerRequest.schemaBodyJson(StudyImportFolderInput).pipe(
+      Effect.mapError(
+        (cause) =>
+          new AuthError({
+            message: "Invalid StudyFrame folder import payload.",
+            status: 400,
+            cause,
+          }),
+      ),
+    );
+    const imported = yield* importFolderToSnapshot(input).pipe(
+      Effect.mapError(
+        (cause) =>
+          new AuthError({
+            message: cause.message,
+            status: 400,
+            cause,
+          }),
+      ),
+    );
+    const repository = yield* StudyFrameRepository;
+    yield* repository.saveSnapshot(imported.snapshot);
+
+    return HttpServerResponse.jsonUnsafe(imported, {
+      status: 200,
+      headers: browserApiCorsHeaders,
+    });
   }).pipe(
     Effect.catchTag("AuthError", (error) => respondToAuthError(error)),
     Effect.catchTags({

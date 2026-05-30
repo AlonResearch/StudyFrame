@@ -91,6 +91,7 @@ import {
   orchestrationSnapshotRouteLayer,
 } from "./orchestration/http.ts";
 import {
+  studyFrameImportFolderRouteLayer,
   studyFrameSnapshotGetRouteLayer,
   studyFrameSnapshotPutRouteLayer,
 } from "./studyFrame/http.ts";
@@ -321,6 +322,7 @@ export const makeRoutesLayer = Layer.mergeAll(
   attachmentsRouteLayer,
   orchestrationDispatchRouteLayer,
   orchestrationSnapshotRouteLayer,
+  studyFrameImportFolderRouteLayer,
   studyFrameSnapshotGetRouteLayer,
   studyFrameSnapshotPutRouteLayer,
   otlpTracesProxyRouteLayer,

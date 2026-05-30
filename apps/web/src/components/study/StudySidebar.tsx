@@ -34,10 +34,13 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from "~/components/ui/sidebar";
+import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
+import { importStudyFolder } from "~/study/studyFolderImport";
 import { parseStudyImportJson } from "~/study/studyImport";
 import { getBestAttempt, getQuestionsForTopicThread } from "~/study/studyLogic";
 import { useStudyFrameStore } from "~/study/studyStore";
+import type { StudyDataset } from "~/study/studyTypes";
 import { cn } from "~/lib/utils";
 
 export function StudySidebar() {
@@ -170,6 +173,11 @@ export function StudySidebar() {
       <StudyImportDialog
         open={importOpen}
         onOpenChange={setImportOpen}
+        projectId={selectedProjectId}
+        onFolderImported={(dataset) => {
+          replaceDataset(dataset);
+          setImportOpen(false);
+        }}
         onImport={(rawJson) => {
           replaceDataset(parseStudyImportJson(rawJson, new Date().toISOString()));
           setImportOpen(false);
@@ -193,14 +201,21 @@ function ProgressBar({ value }: { value: number }) {
 function StudyImportDialog({
   open,
   onOpenChange,
+  projectId,
+  onFolderImported,
   onImport,
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
+  readonly projectId: string | null;
+  readonly onFolderImported: (dataset: StudyDataset) => void;
   readonly onImport: (rawJson: string) => void;
 }) {
   const [rawJson, setRawJson] = useState("");
+  const [sourceRoot, setSourceRoot] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [importingFolder, setImportingFolder] = useState(false);
+  const [folderImportSummary, setFolderImportSummary] = useState<string | null>(null);
 
   const handleImport = () => {
     try {
@@ -210,6 +225,29 @@ function StudyImportDialog({
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not import this file.");
     }
+  };
+
+  const handleFolderImport = () => {
+    const trimmedSourceRoot = sourceRoot.trim();
+    if (!trimmedSourceRoot || importingFolder) return;
+
+    setImportingFolder(true);
+    setError(null);
+    setFolderImportSummary(null);
+    void importStudyFolder({ projectId, sourceRoot: trimmedSourceRoot })
+      .then(({ snapshot, result }) => {
+        onFolderImported(snapshot.dataset);
+        setFolderImportSummary(
+          `Imported ${result.importedDocumentCount} files and ${result.questionCandidateCount} question candidates.`,
+        );
+        setSourceRoot("");
+      })
+      .catch((cause) => {
+        setError(cause instanceof Error ? cause.message : "Could not import this folder.");
+      })
+      .finally(() => {
+        setImportingFolder(false);
+      });
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -232,11 +270,36 @@ function StudyImportDialog({
         <DialogHeader>
           <DialogTitle>Import course</DialogTitle>
           <DialogDescription>
-            Add real extracted questions as StudyFrame JSON. Imported questions become the source
-            practice queue.
+            Import a local course folder through the server, or paste StudyFrame JSON. Imported
+            questions become the source practice queue.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
+          <div className="rounded-lg border border-border bg-background/65 p-3">
+            <div className="text-xs font-medium text-muted-foreground">Course folder</div>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+              <Input
+                value={sourceRoot}
+                onChange={(event) => setSourceRoot(event.target.value)}
+                placeholder="G:\My Drive\Bar-Ilan\Signal and Data Analysis\Quiz"
+              />
+              <Button
+                className="shrink-0"
+                size="sm"
+                disabled={sourceRoot.trim().length === 0 || importingFolder}
+                onClick={handleFolderImport}
+              >
+                <FilePlus2Icon className="size-4" />
+                {importingFolder ? "Importing" : "Import folder"}
+              </Button>
+            </div>
+            {folderImportSummary ? (
+              <div className="mt-2 text-xs text-muted-foreground">{folderImportSummary}</div>
+            ) : null}
+          </div>
+
+          <div className="my-4 h-px bg-border" />
+
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" render={<label />}>
               <UploadIcon className="size-4" />
