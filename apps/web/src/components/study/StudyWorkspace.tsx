@@ -8,9 +8,11 @@ import {
   FileDownIcon,
   FileTextIcon,
   LightbulbIcon,
+  ListTreeIcon,
   ListRestartIcon,
   NotebookTabsIcon,
   RotateCcwIcon,
+  SigmaIcon,
   SparklesIcon,
 } from "lucide-react";
 import { useEffect, useMemo } from "react";
@@ -29,6 +31,7 @@ import {
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { SidebarInset, SidebarTrigger } from "~/components/ui/sidebar";
 import { Textarea } from "~/components/ui/textarea";
+import { StudyMarkdown } from "~/components/study/StudyMarkdown";
 import {
   exportMistakesReview,
   exportScoreSummary,
@@ -49,7 +52,12 @@ import {
 import { useStudyFrameStore } from "~/study/studyStore";
 import { getStudySupportVisibility, getVisibleSourceContextSupport } from "~/study/studyVisibility";
 import { installStudyFrameServerSync } from "~/study/studyServerSync";
-import type { StudyCompletionSummary, StudyQuestion } from "~/study/studyTypes";
+import type {
+  StudyCompletionSummary,
+  StudyDataset,
+  StudyQuestion,
+  StudyTopicModule,
+} from "~/study/studyTypes";
 import { APP_DISPLAY_NAME } from "~/branding";
 import { isElectron } from "~/env";
 import { cn } from "~/lib/utils";
@@ -74,6 +82,7 @@ export function StudyWorkspace() {
   const exhaustionSummaryId = useStudyFrameStore((state) => state.exhaustionSummaryId);
   const reviewModeTopicThreadId = useStudyFrameStore((state) => state.reviewModeTopicThreadId);
   const setAnswerDraft = useStudyFrameStore((state) => state.setAnswerDraft);
+  const selectQuestion = useStudyFrameStore((state) => state.selectQuestion);
   const requestHint = useStudyFrameStore((state) => state.requestHint);
   const checkDirection = useStudyFrameStore((state) => state.checkDirection);
   const submitAnswer = useStudyFrameStore((state) => state.submitAnswer);
@@ -97,6 +106,14 @@ export function StudyWorkspace() {
   const topicQuestions = topicThread ? getQuestionsForTopicThread(dataset, topicThread.id) : [];
   const realQuestions = topicQuestions.filter((question) => question.isRealQuestion);
   const generatedQuestions = topicQuestions.filter((question) => !question.isRealQuestion);
+  const topicCluster =
+    dataset.topicClusters?.find(
+      (cluster) =>
+        cluster.projectId === selectedProjectId && cluster.displayName === topicThread?.displayName,
+    ) ?? null;
+  const topicModule =
+    dataset.topicModules?.find((module) => module.topicClusterId === topicCluster?.id) ?? null;
+  const subtypeGroups = getSubtypeGroups(dataset, realQuestions);
   const unattemptedRealQuestions = topicThread
     ? getUnattemptedRealQuestions(dataset, attempts, topicThread.id)
     : [];
@@ -191,6 +208,16 @@ export function StudyWorkspace() {
                 generatedQuestionCount={generatedQuestions.length}
                 averageScore={topicSummary?.weightedScorePercent ?? 0}
                 weakSubtypes={topicSummary?.weakSubtypes ?? []}
+              />
+            ) : null}
+
+            {topicModule && subtypeGroups.length > 0 ? (
+              <TopicModuleOverview
+                topicModule={topicModule}
+                subtypeGroups={subtypeGroups}
+                attempts={attempts}
+                activeQuestionId={activeQuestionId}
+                onSelectQuestion={selectQuestion}
               />
             ) : null}
 
@@ -432,6 +459,95 @@ function TopicHeader({
   );
 }
 
+interface StudySubtypeGroup {
+  readonly subtype: string;
+  readonly questions: readonly StudyQuestion[];
+}
+
+function TopicModuleOverview({
+  topicModule,
+  subtypeGroups,
+  attempts,
+  activeQuestionId,
+  onSelectQuestion,
+}: {
+  readonly topicModule: StudyTopicModule;
+  readonly subtypeGroups: readonly StudySubtypeGroup[];
+  readonly attempts: ReturnType<typeof useStudyFrameStore.getState>["attempts"];
+  readonly activeQuestionId: string | null;
+  readonly onSelectQuestion: (questionId: string) => void;
+}) {
+  return (
+    <section className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-semibold">
+        <ListTreeIcon className="size-4" />
+        Topic module
+      </div>
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="space-y-4 p-4">
+          <section>
+            <h2 className="text-xs font-medium text-muted-foreground">Theory summary</h2>
+            <StudyMarkdown className="mt-2" content={topicModule.theorySummaryMarkdown} />
+          </section>
+          {topicModule.formulaSheetMarkdown.trim().length > 0 ? (
+            <section>
+              <h2 className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <SigmaIcon className="size-3.5" />
+                Formula reminders
+              </h2>
+              <StudyMarkdown className="mt-2" content={topicModule.formulaSheetMarkdown} />
+            </section>
+          ) : null}
+        </div>
+        <div className="border-t border-border p-3 lg:border-t-0 lg:border-l">
+          <div className="px-1 text-xs font-medium text-muted-foreground">Real-question queue</div>
+          <div className="mt-2 space-y-3">
+            {subtypeGroups.map((group) => (
+              <section key={group.subtype}>
+                <div className="flex items-center justify-between gap-2 px-1 text-xs">
+                  <span className="truncate font-medium">{group.subtype}</span>
+                  <span className="shrink-0 text-muted-foreground">
+                    {
+                      group.questions.filter((question) =>
+                        isQuestionAttempted(attempts, question.id),
+                      ).length
+                    }
+                    /{group.questions.length}
+                  </span>
+                </div>
+                <div className="mt-1 grid gap-1">
+                  {group.questions.map((question) => {
+                    const attempted = isQuestionAttempted(attempts, question.id);
+                    const active = question.id === activeQuestionId;
+                    return (
+                      <button
+                        key={question.id}
+                        type="button"
+                        className={cn(
+                          "flex min-w-0 items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+                          active ? "bg-accent text-accent-foreground" : "hover:bg-muted",
+                        )}
+                        onClick={() => onSelectQuestion(question.id)}
+                      >
+                        <span className="truncate">{question.sourceQuizLabel}</span>
+                        {attempted ? (
+                          <CheckCircle2Icon className="size-3.5 shrink-0 text-success-foreground" />
+                        ) : (
+                          <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function CompactStat({
   label,
   value,
@@ -445,6 +561,22 @@ function CompactStat({
       <div className="mt-1 text-sm font-semibold">{value}</div>
     </div>
   );
+}
+
+function getSubtypeGroups(
+  dataset: Pick<StudyDataset, "questionTopics">,
+  questions: readonly StudyQuestion[],
+): StudySubtypeGroup[] {
+  const groups = new Map<string, StudyQuestion[]>();
+  for (const question of questions) {
+    const subtype = getQuestionTopic(dataset, question.id)?.subtype ?? "Unclassified";
+    const group = groups.get(subtype) ?? [];
+    group.push(question);
+    groups.set(subtype, group);
+  }
+  return [...groups.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([subtype, groupedQuestions]) => ({ subtype, questions: groupedQuestions }));
 }
 
 function QuestionPracticePanel({
@@ -505,7 +637,7 @@ function QuestionPracticePanel({
       <div className="flex flex-1 flex-col gap-4 p-4">
         <section>
           <h2 className="text-sm font-semibold">Question</h2>
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{question.rawPrompt}</p>
+          <StudyMarkdown className="mt-2" content={question.rawPrompt} />
         </section>
 
         <section className="flex flex-1 flex-col">
@@ -820,7 +952,7 @@ function ReviewSolutionsPanel({
                 <span className="text-sm font-medium">{question.sourceQuizLabel}</span>
                 {bestAttempt ? <Badge variant="outline">{bestAttempt.scorePercent}%</Badge> : null}
               </div>
-              <p className="mt-2 text-sm leading-relaxed">{question.rawPrompt}</p>
+              <StudyMarkdown className="mt-2" content={question.rawPrompt} />
               <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
                 {(support?.solutionSteps ?? []).map((step) => (
                   <li key={step}>{step}</li>
