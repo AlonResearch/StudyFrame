@@ -7,6 +7,8 @@ import { Label } from "~/components/ui/label";
 import { Radio, RadioGroup } from "~/components/ui/radio-group";
 import { Textarea } from "~/components/ui/textarea";
 import {
+  createStudyAnswerTableRow,
+  nextStudyAnswerTableRowId,
   parseStudyAnswerSelections,
   parseStudyAnswerTableRows,
   readStudyAnswerFileName,
@@ -179,7 +181,7 @@ function TableAnswerInput({
         </thead>
         <tbody className="divide-y divide-border">
           {rows.map((row, rowIndex) => (
-            <tr key={rowIndex}>
+            <tr key={row.__studyFrameRowId}>
               {columns.map((column) => (
                 <td className="min-w-36 px-2 py-2" key={column}>
                   <Input
@@ -218,7 +220,10 @@ function TableAnswerInput({
           size="sm"
           variant="ghost"
           onClick={() =>
-            updateRows([...rows, Object.fromEntries(columns.map((column) => [column, ""]))])
+            updateRows([
+              ...rows,
+              createStudyAnswerTableRow(columns, nextStudyAnswerTableRowId(rows)),
+            ])
           }
         >
           <PlusIcon />

@@ -8,6 +8,7 @@ export interface StudyAnswerInputConfig {
 export type StudyAnswerTableRow = Readonly<Record<string, string>>;
 
 const DEFAULT_TABLE_COLUMNS = ["Value"];
+const TABLE_ROW_ID = "__studyFrameRowId";
 
 export function resolveStudyAnswerInputConfig(metadata: unknown): StudyAnswerInputConfig {
   if (!isRecord(metadata)) {
@@ -54,20 +55,24 @@ export function parseStudyAnswerTableRows(
   const normalizedColumns = columns.length > 0 ? columns : DEFAULT_TABLE_COLUMNS;
   const parsed = parseJson(draft);
   if (!Array.isArray(parsed)) {
-    return [emptyTableRow(normalizedColumns)];
+    return [createStudyAnswerTableRow(normalizedColumns, "row-1")];
   }
 
   const rows = parsed
     .filter(isRecord)
-    .map((row) =>
-      Object.fromEntries(
-        normalizedColumns.map((column) => [
+    .map((row, index) =>
+      Object.fromEntries([
+        ...normalizedColumns.map((column) => [
           column,
           typeof row[column] === "string" ? row[column] : "",
         ]),
-      ),
+        [
+          TABLE_ROW_ID,
+          typeof row[TABLE_ROW_ID] === "string" ? row[TABLE_ROW_ID] : `row-${index + 1}`,
+        ],
+      ]),
     );
-  return rows.length > 0 ? rows : [emptyTableRow(normalizedColumns)];
+  return rows.length > 0 ? rows : [createStudyAnswerTableRow(normalizedColumns, "row-1")];
 }
 
 export function serializeStudyAnswerTableRows(
@@ -95,8 +100,19 @@ export function readStudyAnswerFileName(draft: string): string | null {
   return isRecord(parsed) && typeof parsed.name === "string" ? parsed.name : null;
 }
 
-function emptyTableRow(columns: readonly string[]): StudyAnswerTableRow {
-  return Object.fromEntries(columns.map((column) => [column, ""]));
+export function createStudyAnswerTableRow(
+  columns: readonly string[],
+  rowId: string,
+): StudyAnswerTableRow {
+  return Object.fromEntries([...columns.map((column) => [column, ""]), [TABLE_ROW_ID, rowId]]);
+}
+
+export function nextStudyAnswerTableRowId(rows: readonly StudyAnswerTableRow[]): string {
+  const maxId = Math.max(
+    0,
+    ...rows.map((row) => Number.parseInt(row[TABLE_ROW_ID]?.replace(/^row-/, "") ?? "", 10) || 0),
+  );
+  return `row-${maxId + 1}`;
 }
 
 function parseJson(value: string): unknown {

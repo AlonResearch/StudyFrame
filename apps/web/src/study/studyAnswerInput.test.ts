@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  nextStudyAnswerTableRowId,
   parseStudyAnswerSelections,
   parseStudyAnswerTableRows,
   readStudyAnswerFileName,
@@ -42,8 +43,9 @@ describe("studyAnswerInput", () => {
     const columns = ["Threshold", "Rate"];
     const rows = parseStudyAnswerTableRows('[{"Threshold":"0.5","Ignored":"x"}]', columns);
 
-    expect(rows).toEqual([{ Threshold: "0.5", Rate: "" }]);
+    expect(rows).toEqual([{ Threshold: "0.5", Rate: "", __studyFrameRowId: "row-1" }]);
     expect(serializeStudyAnswerTableRows(rows, columns)).toBe('[{"Threshold":"0.5","Rate":""}]');
+    expect(nextStudyAnswerTableRowId(rows)).toBe("row-2");
   });
 
   it("stores only a selected file descriptor", () => {
