@@ -113,7 +113,9 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
 
       const imported = yield* importFolderToSnapshot({ sourceRoot: root });
       const importedQuestionId = imported.snapshot.dataset.questions[0]?.id;
+      const importedDocumentId = imported.snapshot.dataset.sourceDocuments?.[0]?.id;
       assert.isDefined(importedQuestionId);
+      assert.isDefined(importedDocumentId);
       let providerCallCount = 0;
       const generated = analyzeProjectWithProvider(imported.snapshot, {
         projectId: imported.result.projectId,
@@ -127,6 +129,14 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
                 providerCallCount += 1;
                 if (providerCallCount === 1) {
                   return Effect.succeed({
+                    sourceRoles: [
+                      {
+                        documentId: importedDocumentId,
+                        role: "quiz",
+                        confidence: 0.97,
+                        warnings: ["Provider reviewed the quiz role."],
+                      },
+                    ],
                     questionClassifications: [
                       {
                         questionId: importedQuestionId,
@@ -210,6 +220,10 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
       assert.equal(
         analyzed.snapshot.dataset.topicModules?.[0]?.generationMetadataJson?.promptVersion,
         "studyframe-analysis-v1",
+      );
+      assert.include(
+        analyzed.snapshot.dataset.projects[0]?.extractionWarnings ?? [],
+        "quiz-2024.md: Provider reviewed the quiz role.",
       );
       assert.isDefined(
         analyzed.snapshot.dataset.topicModules?.[0]?.generationMetadataJson?.rawStructuredResult,
@@ -300,6 +314,7 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
                 providerCallCount += 1;
                 if (providerCallCount === 1) {
                   return Effect.succeed({
+                    sourceRoles: [],
                     questionClassifications: [
                       {
                         questionId: rateQuestion.id,
