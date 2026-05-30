@@ -9,6 +9,8 @@ import {
   EyeIcon,
   FileDownIcon,
   FileTextIcon,
+  HistoryIcon,
+  ImageIcon,
   LightbulbIcon,
   ListTreeIcon,
   ListRestartIcon,
@@ -32,6 +34,7 @@ import {
 } from "~/components/ui/dialog";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { SidebarInset, SidebarTrigger } from "~/components/ui/sidebar";
+import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { StudyMarkdown } from "~/components/study/StudyMarkdown";
 import {
@@ -42,6 +45,7 @@ import {
 } from "~/study/studyExport";
 import {
   createCompletionSummary,
+  getAttemptsForQuestion,
   getBestAttempt,
   getNotPerfectRealQuestions,
   getQuestionSupport,
@@ -56,9 +60,12 @@ import { getStudySupportVisibility, getVisibleSourceContextSupport } from "~/stu
 import { installStudyFrameServerSync } from "~/study/studyServerSync";
 import type {
   StudyCompletionSummary,
+  StudyAnswerInputType,
+  StudyAttempt,
   StudyDataset,
   StudyQuestionClassification,
   StudyQuestion,
+  StudySourceAsset,
   StudyTopicCluster,
   StudyTopicModule,
 } from "~/study/studyTypes";
@@ -107,6 +114,20 @@ export function StudyWorkspace() {
     dataset.questions.find((question) => question.id === activeQuestionId) ?? null;
   const activeSupport = activeQuestion ? getQuestionSupport(dataset, activeQuestion.id) : null;
   const activeTopic = activeQuestion ? getQuestionTopic(dataset, activeQuestion.id) : null;
+  const activeCandidate =
+    activeQuestion && dataset.questionCandidates
+      ? dataset.questionCandidates.find(
+          (candidate) =>
+            candidate.documentId === activeQuestion.documentId &&
+            candidate.sourceAnchor === activeQuestion.sourceAnchor,
+        )
+      : null;
+  const activePracticeItem =
+    dataset.practiceItems?.find((item) => item.sourceQuestionCandidateId === activeCandidate?.id) ??
+    null;
+  const activeSourceAssets = activeCandidate
+    ? (dataset.sourceAssets ?? []).filter((asset) => activeCandidate.assetIds.includes(asset.id))
+    : [];
   const topicQuestions = topicThread ? getQuestionsForTopicThread(dataset, topicThread.id) : [];
   const realQuestions = topicQuestions.filter((question) => question.isRealQuestion);
   const generatedQuestions = topicQuestions.filter((question) => !question.isRealQuestion);
@@ -262,6 +283,8 @@ export function StudyWorkspace() {
                         : []
                     }
                     bestAttempt={getBestAttempt(attempts, activeQuestion.id)}
+                    attempts={getAttemptsForQuestion(attempts, activeQuestion.id)}
+                    answerInputType={activePracticeItem?.answerInputType ?? "free_text"}
                     onAnswerDraftChange={(answer) => setAnswerDraft(activeQuestion.id, answer)}
                     onHint={() => requestHint(activeQuestion.id)}
                     onCheckDirection={() => checkDirection(activeQuestion.id)}
@@ -287,6 +310,7 @@ export function StudyWorkspace() {
                   supportSummary={sourceContextSupport.supportSummary}
                   expectedAnswer={sourceContextSupport.expectedAnswer}
                   extractionWarnings={project?.extractionWarnings ?? []}
+                  sourceAssets={activeSourceAssets}
                   realQuestionsRemaining={unattemptedRealQuestions.length}
                   notPerfectCount={notPerfectRealQuestions.length}
                   generationEnabled={topicExhausted}
@@ -702,6 +726,8 @@ function QuestionPracticePanel({
   solutionSteps,
   commonMistakes,
   bestAttempt,
+  attempts,
+  answerInputType,
   onAnswerDraftChange,
   onHint,
   onCheckDirection,
@@ -721,6 +747,8 @@ function QuestionPracticePanel({
   readonly solutionSteps: readonly string[];
   readonly commonMistakes: readonly string[];
   readonly bestAttempt: ReturnType<typeof getBestAttempt>;
+  readonly attempts: readonly StudyAttempt[];
+  readonly answerInputType: StudyAnswerInputType;
   readonly onAnswerDraftChange: (answer: string) => void;
   readonly onHint: () => void;
   readonly onCheckDirection: () => void;
@@ -755,18 +783,33 @@ function QuestionPracticePanel({
         <section className="flex flex-1 flex-col">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold">Answer</h2>
-            {bestAttempt ? (
-              <Badge variant={bestAttempt.scorePercent >= 100 ? "success" : "outline"}>
-                Best {bestAttempt.scorePercent}%
-              </Badge>
-            ) : null}
+            <div className="flex items-center gap-2">
+              {answerInputType !== "free_text" ? (
+                <Badge variant="outline">{answerInputType.replace("_", " ")}</Badge>
+              ) : null}
+              {bestAttempt ? (
+                <Badge variant={bestAttempt.scorePercent >= 100 ? "success" : "outline"}>
+                  Best {bestAttempt.scorePercent}%
+                </Badge>
+              ) : null}
+            </div>
           </div>
-          <Textarea
-            className="min-h-44 flex-1"
-            placeholder="Work the real question here..."
-            value={answerDraft}
-            onChange={(event) => onAnswerDraftChange(event.target.value)}
-          />
+          {answerInputType === "numeric" ? (
+            <Input
+              className="h-10"
+              inputMode="decimal"
+              placeholder="Enter a numeric answer"
+              value={answerDraft}
+              onChange={(event) => onAnswerDraftChange(event.target.value)}
+            />
+          ) : (
+            <Textarea
+              className="min-h-44 flex-1"
+              placeholder="Work the real question here..."
+              value={answerDraft}
+              onChange={(event) => onAnswerDraftChange(event.target.value)}
+            />
+          )}
         </section>
 
         {latestHint ? (
@@ -795,6 +838,8 @@ function QuestionPracticePanel({
         {solutionVisible ? (
           <SolutionBlock solutionSteps={solutionSteps} commonMistakes={commonMistakes} />
         ) : null}
+
+        <AttemptHistory attempts={attempts} />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-muted/45 px-4 py-3">
@@ -888,12 +933,46 @@ function SolutionBlock({
   );
 }
 
+function AttemptHistory({ attempts }: { readonly attempts: readonly StudyAttempt[] }) {
+  if (attempts.length === 0) return null;
+
+  return (
+    <section className="rounded-lg border border-border bg-background/65 px-3 py-3">
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <HistoryIcon className="size-4" />
+        Attempt history
+      </div>
+      <div className="mt-2 divide-y divide-border">
+        {attempts.toReversed().map((attempt) => (
+          <div
+            key={attempt.id}
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-xs"
+          >
+            <Badge variant={attempt.scorePercent >= 100 ? "success" : "outline"}>
+              {attempt.status.replace("_", " ")}
+            </Badge>
+            <span className="font-medium">
+              {attempt.score}/{attempt.maxScore} pts
+            </span>
+            <span className="text-muted-foreground">{attempt.scorePercent}%</span>
+            <span className="text-muted-foreground">{attempt.usedHintsCount} hints</span>
+            <span className="ml-auto text-muted-foreground">
+              {new Date(attempt.createdAt).toLocaleString()}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function SourceContextPanel({
   question,
   documentTitle,
   supportSummary,
   expectedAnswer,
   extractionWarnings,
+  sourceAssets,
   realQuestionsRemaining,
   notPerfectCount,
   generationEnabled,
@@ -908,6 +987,7 @@ function SourceContextPanel({
   readonly supportSummary: string | null;
   readonly expectedAnswer: readonly string[];
   readonly extractionWarnings: readonly string[];
+  readonly sourceAssets: readonly StudySourceAsset[];
   readonly realQuestionsRemaining: number;
   readonly notPerfectCount: number;
   readonly generationEnabled: boolean;
@@ -954,6 +1034,7 @@ function SourceContextPanel({
                 </div>
               </div>
             ) : null}
+            {sourceAssets.length > 0 ? <SourceAssetList assets={sourceAssets} /> : null}
           </>
         ) : (
           <div className="text-muted-foreground">Select a topic question.</div>
@@ -1022,6 +1103,53 @@ function SourceContextPanel({
       </div>
     </div>
   );
+}
+
+function SourceAssetList({ assets }: { readonly assets: readonly StudySourceAsset[] }) {
+  return (
+    <div>
+      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <ImageIcon className="size-3.5" />
+        Linked source assets
+      </div>
+      <div className="mt-2 space-y-2">
+        {assets.map((asset) => {
+          const previewUri = sourceAssetPreviewUri(asset);
+          return (
+            <section key={asset.id} className="rounded-md border border-border bg-muted/35 p-2">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <Badge size="sm" variant="outline">
+                  {asset.kind.replace("_", " ")}
+                </Badge>
+                <span className="break-all text-muted-foreground">{asset.sourceAnchor}</span>
+              </div>
+              {previewUri ? (
+                <img
+                  className="mt-2 max-h-56 w-full rounded-md border border-border object-contain"
+                  src={previewUri}
+                  alt={asset.sourceAnchor}
+                />
+              ) : null}
+              {asset.contentText ? (
+                <StudyMarkdown
+                  className="mt-2 max-h-56 overflow-auto text-xs"
+                  content={asset.contentText}
+                />
+              ) : null}
+              {asset.localUri ? (
+                <div className="mt-2 break-all text-xs text-muted-foreground">{asset.localUri}</div>
+              ) : null}
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function sourceAssetPreviewUri(asset: StudySourceAsset): string | null {
+  if (asset.kind !== "image" || !asset.localUri) return null;
+  return /^(?:data:|https?:\/\/|file:\/\/)/.test(asset.localUri) ? asset.localUri : null;
 }
 
 function ContextRow({ label, value }: { readonly label: string; readonly value: string }) {
