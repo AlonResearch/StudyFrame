@@ -1,10 +1,10 @@
 {
   "name": "t3",
-  "version": "0.0.24",
+  "version": "0.0.1",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/pingdotgg/t3code",
+    "url": "https://github.com/AlonResearch/StudyFrame",
     "directory": "apps/server"
   },
   "bin": {
