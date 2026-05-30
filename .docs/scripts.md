@@ -21,4 +21,3 @@
 - `bun run qa:studyframe:release`: run the full StudyFrame gate.
 
 See `AGENTS.md` for the self-correction protocol.
-

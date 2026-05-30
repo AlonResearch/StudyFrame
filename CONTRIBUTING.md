@@ -31,4 +31,3 @@ bun run test
 ```
 
 For StudyFrame workflow changes, also run the relevant `qa:studyframe:*` checks described in `AGENTS.md`.
-

@@ -13,4 +13,3 @@ node ../../scripts/mobile-native-static-check.ts
 ```
 
 Native modules require the Expo Dev Client; Expo Go is not supported.
-

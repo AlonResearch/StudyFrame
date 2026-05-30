@@ -23,4 +23,3 @@ Use separate Claude home paths for isolated accounts or configurations. Mark tok
 ## Product Rule
 
 Provider settings are infrastructure. Keep account, router, and environment-variable details out of the main study UX unless the user opens settings.
-

@@ -17,4 +17,3 @@ bun run qa:studyframe:ux
 ```
 
 The golden audit uses the external Signal/Data Analysis dataset described in `README.md`. It must never rewrite that dataset to make a failure pass.
-

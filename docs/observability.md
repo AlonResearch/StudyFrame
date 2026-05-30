@@ -26,4 +26,3 @@ Relevant code:
 Instrument import, extraction, provider analysis, persistence, grading, and export boundaries. Include project identifiers and source-relative paths when useful, but do not log student answers, API keys, tokens, or raw course content unnecessarily.
 
 When debugging the golden workflow, inspect the generated QA report first and use traces to investigate the failing stage.
-

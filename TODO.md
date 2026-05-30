@@ -21,4 +21,3 @@
 
 - [ ] Keep the golden Signal/Data Analysis audit passing.
 - [ ] Add browser coverage for the full study loop.
-

@@ -21,4 +21,3 @@ This includes StudyFrame QA, formatting, linting, typechecking, tests, and the d
 - Verify update channels and hosted-web settings before enabling inherited release automation.
 
 Treat `.github/workflows/release.yml` and packaging scripts as inherited infrastructure until the StudyFrame distribution model is finalized.
-

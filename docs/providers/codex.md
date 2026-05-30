@@ -25,4 +25,3 @@ The inherited provider settings support multiple Codex accounts. Use clear displ
 ## Product Rule
 
 Provider-backed workflows should degrade visibly to local fallback when Codex is unavailable. Golden acceptance checks require live Codex.
-

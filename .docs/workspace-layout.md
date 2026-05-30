@@ -8,4 +8,3 @@
 - `packages/contracts/src/study.ts`: shared StudyFrame schemas.
 - `packages/shared`: inherited shared runtime utilities.
 - `docs/studyframe-upstream.md`: boundary between StudyFrame product code and inherited T3 Code infrastructure.
-

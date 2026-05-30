@@ -20,4 +20,3 @@ bun run qa:studyframe:ux
 ```
 
 Use `AGENTS.md` for the full completion requirements.
-
