@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { randomUUID } from "~/lib/utils";
 import { withDerivedStudyDomainModel, withRegeneratedStudyPracticeModel } from "./studyDomainModel";
+import { requestStudyFeedback } from "./studyFeedback";
 import {
   checkDirection,
   createCompletionSummary,
@@ -165,6 +166,26 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
             [questionId]: feedback,
           },
         });
+        void requestStudyFeedback({
+          questionId,
+          answer: state.answerDraftByQuestionId[questionId] ?? "",
+          action: "check_direction",
+        })
+          .then((providerFeedback) => {
+            if (!providerFeedback) return;
+            set((current) => {
+              if (current.latestFeedbackByQuestionId[questionId]?.tone !== "direction") {
+                return current;
+              }
+              return {
+                latestFeedbackByQuestionId: {
+                  ...current.latestFeedbackByQuestionId,
+                  [questionId]: providerFeedback,
+                },
+              };
+            });
+          })
+          .catch(() => undefined);
       },
 
       submitAnswer: (questionId) => {
@@ -206,6 +227,18 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
             : state.completionSummaries,
           exhaustionSummaryId: exhaustionSummary?.id ?? state.exhaustionSummaryId,
         });
+        void requestStudyFeedback({
+          questionId,
+          answer,
+          action: "grade_attempt",
+        })
+          .then((providerFeedback) => {
+            if (!providerFeedback) return;
+            set((current) =>
+              applyProviderAttemptFeedback(current, attempt.id, questionId, providerFeedback),
+            );
+          })
+          .catch(() => undefined);
       },
 
       revealSolution: (questionId) => {
@@ -526,6 +559,52 @@ function makeAttempt(input: {
     usedCheckDirection: input.usedCheckDirection,
     attemptNumber: nextAttemptNumber(input.attempts, input.questionId),
     createdAt: nowIso(),
+  };
+}
+
+function applyProviderAttemptFeedback(
+  state: StudyFrameStoreState,
+  attemptId: string,
+  questionId: string,
+  feedback: StudyFeedbackResult,
+): Partial<StudyFrameStoreState> {
+  const attempts = state.attempts.map((attempt) =>
+    attempt.id === attemptId
+      ? {
+          ...attempt,
+          feedback,
+          score: feedback.score,
+          maxScore: feedback.maxScore,
+          scorePercent: feedback.scorePercent,
+          status: feedback.status,
+        }
+      : attempt,
+  );
+  const latestAttemptId = attempts.findLast((attempt) => attempt.questionId === questionId)?.id;
+  const completionSummaries = state.completionSummaries.map((summary) => {
+    if (summary.topicThreadId === null || summary.topicThreadId !== state.selectedTopicThreadId) {
+      return summary;
+    }
+    return createCompletionSummary({
+      dataset: state.dataset,
+      attempts,
+      scope: { kind: "topic", topicThreadId: summary.topicThreadId },
+      now: summary.createdAt,
+      id: summary.id,
+    });
+  });
+
+  return {
+    attempts,
+    completionSummaries,
+    ...(latestAttemptId === attemptId
+      ? {
+          latestFeedbackByQuestionId: {
+            ...state.latestFeedbackByQuestionId,
+            [questionId]: feedback,
+          },
+        }
+      : {}),
   };
 }
 

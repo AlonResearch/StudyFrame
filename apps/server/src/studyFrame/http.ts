@@ -1,5 +1,6 @@
 import {
   StudyAnalyzeProjectInput,
+  StudyFeedbackInput,
   StudyFrameSnapshot,
   StudyImportFolderInput,
 } from "@t3tools/contracts";
@@ -13,6 +14,7 @@ import type { PersistenceDecodeError, PersistenceSqlError } from "../persistence
 import { StudyFrameRepository } from "../persistence/Services/StudyFrame.ts";
 import { browserApiCorsHeaders } from "../httpCors.ts";
 import { analyzeProjectWithProvider } from "./analyzeProjectWithProvider.ts";
+import { generateStudyFeedbackWithProvider } from "./feedbackWithProvider.ts";
 import { importFolderToSnapshot } from "./importFolder.ts";
 
 function respondToPersistenceError(error: PersistenceSqlError | PersistenceDecodeError) {
@@ -174,6 +176,56 @@ export const studyFrameAnalyzeProjectRouteLayer = HttpRouter.add(
       status: 200,
       headers: browserApiCorsHeaders,
     });
+  }).pipe(
+    Effect.catchTag("AuthError", (error) => respondToAuthError(error)),
+    Effect.catchTags({
+      PersistenceDecodeError: (error) => respondToPersistenceError(error),
+      PersistenceSqlError: (error) => respondToPersistenceError(error),
+    }),
+  ),
+);
+
+export const studyFrameFeedbackRouteLayer = HttpRouter.add(
+  "POST",
+  "/api/studyframe/feedback",
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const serverAuth = yield* ServerAuth;
+    yield* serverAuth.authenticateHttpRequest(request);
+
+    const input = yield* HttpServerRequest.schemaBodyJson(StudyFeedbackInput).pipe(
+      Effect.mapError(
+        (cause) =>
+          new AuthError({
+            message: "Invalid StudyFrame feedback payload.",
+            status: 400,
+            cause,
+          }),
+      ),
+    );
+    const repository = yield* StudyFrameRepository;
+    const snapshotOption = yield* repository.loadSnapshot();
+    if (Option.isNone(snapshotOption)) {
+      return yield* new AuthError({
+        message: "Import a StudyFrame course before requesting feedback.",
+        status: 400,
+      });
+    }
+    const feedback = yield* generateStudyFeedbackWithProvider(snapshotOption.value, input).pipe(
+      Effect.mapError(
+        (cause) =>
+          new AuthError({
+            message: cause.message,
+            status: 400,
+            cause,
+          }),
+      ),
+    );
+
+    return HttpServerResponse.jsonUnsafe(
+      { feedback: Option.getOrNull(feedback) },
+      { status: 200, headers: browserApiCorsHeaders },
+    );
   }).pipe(
     Effect.catchTag("AuthError", (error) => respondToAuthError(error)),
     Effect.catchTags({

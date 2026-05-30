@@ -22,3 +22,4 @@ export * from "./filesystem.ts";
 export * from "./review.ts";
 export * from "./rpc.ts";
 export * from "./study.ts";
+export * from "./studyFeedback.ts";

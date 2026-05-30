@@ -13,13 +13,8 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import { ProviderInstanceRegistry } from "../provider/Services/ProviderInstanceRegistry.ts";
-import { ServerSettingsService } from "../serverSettings.ts";
-import {
-  makeTextGenerationFromRegistry,
-  TextGeneration,
-} from "../textGeneration/TextGeneration.ts";
 import { analyzeProjectSnapshot } from "./analyzeProject.ts";
+import { resolveOptionalStudyFrameTextGeneration } from "./providerTextGeneration.ts";
 
 export const STUDYFRAME_ANALYSIS_PROMPT_VERSION = "studyframe-analysis-v1";
 
@@ -56,22 +51,14 @@ export const analyzeProjectWithProvider = Effect.fn("StudyFrame.analyzeProjectWi
       );
       if (!project) return local;
 
-      const textGenerationService = yield* Effect.serviceOption(TextGeneration);
-      const providerInstanceRegistry = yield* Effect.serviceOption(ProviderInstanceRegistry);
-      const serverSettings = yield* Effect.serviceOption(ServerSettingsService);
-      const textGeneration =
-        Option.getOrUndefined(textGenerationService) ??
-        Option.getOrUndefined(
-          providerInstanceRegistry.pipe(Option.map(makeTextGenerationFromRegistry)),
-        );
-      if (!textGeneration || Option.isNone(serverSettings)) return local;
+      const provider = yield* resolveOptionalStudyFrameTextGeneration;
+      if (Option.isNone(provider)) return local;
 
-      const settings = yield* serverSettings.value.getSettings;
-      const enhancement = yield* textGeneration.generateStructured({
+      const enhancement = yield* provider.value.textGeneration.generateStructured({
         cwd: project.sourceRoot,
         prompt: buildProviderAnalysisPrompt(local),
         outputSchema: ProviderAnalysisEnhancement,
-        modelSelection: settings.textGenerationModelSelection,
+        modelSelection: provider.value.modelSelection,
       });
       return applyProviderEnhancement(local, enhancement);
     });
