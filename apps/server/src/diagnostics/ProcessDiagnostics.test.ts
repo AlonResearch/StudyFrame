@@ -194,10 +194,32 @@ describe("ProcessDiagnostics", () => {
           commands.push({ command: childProcess.command, args: childProcess.args });
           return Effect.succeed(
             mockHandle({
-              stdout: [
-                ` ${process.pid}     1 ${process.pid} Ss 0.0 1024 01:02.03 t3 server`,
-                ` 4242 ${process.pid} ${process.pid} S  1.5 2048 00:04 agent`,
-              ].join("\n"),
+              stdout:
+                process.platform === "win32"
+                  ? JSON.stringify([
+                      {
+                        ProcessId: process.pid,
+                        ParentProcessId: 1,
+                        Name: "node.exe",
+                        CommandLine: "t3 server",
+                        Status: "Live",
+                        WorkingSetSize: 1024,
+                        PercentProcessorTime: 0,
+                      },
+                      {
+                        ProcessId: 4242,
+                        ParentProcessId: process.pid,
+                        Name: "agent.exe",
+                        CommandLine: "agent",
+                        Status: "Live",
+                        WorkingSetSize: 2048,
+                        PercentProcessorTime: 1.5,
+                      },
+                    ])
+                  : [
+                      ` ${process.pid}     1 ${process.pid} Ss 0.0 1024 01:02.03 t3 server`,
+                      ` 4242 ${process.pid} ${process.pid} S  1.5 2048 00:04 agent`,
+                    ].join("\n"),
             }),
           );
         }),
@@ -210,12 +232,17 @@ describe("ProcessDiagnostics", () => {
       );
 
       expect(diagnostics.processes.map((process) => process.pid)).toEqual([4242]);
-      expect(commands).toEqual([
-        {
-          command: "ps",
-          args: ["-axo", "pid=,ppid=,pgid=,stat=,pcpu=,rss=,etime=,command="],
-        },
-      ]);
+      if (process.platform === "win32") {
+        expect(commands[0]?.command).toBe("powershell.exe");
+        expect(commands[0]?.args).toContain("-Command");
+      } else {
+        expect(commands).toEqual([
+          {
+            command: "ps",
+            args: ["-axo", "pid=,ppid=,pgid=,stat=,pcpu=,rss=,etime=,command="],
+          },
+        ]);
+      }
     }),
   );
 
@@ -226,10 +253,32 @@ describe("ProcessDiagnostics", () => {
         ChildProcessSpawner.make(() =>
           Effect.succeed(
             mockHandle({
-              stdout: [
-                ` ${process.pid}     1 ${process.pid} Ss 0.0 1024 01:02.03 t3 server`,
-                ` 4242 ${process.pid} ${process.pid} R  1.5 2048 00:00 ps -axo pid=,ppid=,pgid=,stat=,pcpu=,rss=,etime=,command=`,
-              ].join("\n"),
+              stdout:
+                process.platform === "win32"
+                  ? JSON.stringify([
+                      {
+                        ProcessId: process.pid,
+                        ParentProcessId: 1,
+                        Name: "node.exe",
+                        CommandLine: "t3 server",
+                        Status: "Live",
+                        WorkingSetSize: 1024,
+                        PercentProcessorTime: 0,
+                      },
+                      {
+                        ProcessId: 4242,
+                        ParentProcessId: process.pid,
+                        Name: "powershell.exe",
+                        CommandLine: "powershell.exe Get-CimInstance Win32_Process",
+                        Status: "Live",
+                        WorkingSetSize: 2048,
+                        PercentProcessorTime: 1.5,
+                      },
+                    ])
+                  : [
+                      ` ${process.pid}     1 ${process.pid} Ss 0.0 1024 01:02.03 t3 server`,
+                      ` 4242 ${process.pid} ${process.pid} R  1.5 2048 00:00 ps -axo pid=,ppid=,pgid=,stat=,pcpu=,rss=,etime=,command=`,
+                    ].join("\n"),
             }),
           ),
         ),

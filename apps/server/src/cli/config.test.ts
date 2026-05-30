@@ -1,4 +1,5 @@
 import NodeOS from "node:os";
+import * as NFS from "node:fs";
 
 import { assert, expect, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -52,8 +53,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
     const filePath = yield* fs.makeTempFileScoped({ prefix: "t3-bootstrap-", suffix: ".ndjson" });
     const encoded = yield* encodeDesktopBootstrap(payload);
     yield* fs.writeFileString(filePath, `${encoded}\n`);
-    const { fd } = yield* fs.open(filePath, { flag: "r" });
-    return fd;
+    return NFS.openSync(filePath, "r");
   });
 
   it.effect("falls back to effect/config values when flags are omitted", () =>
@@ -259,8 +259,8 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
 
   it.effect("uses bootstrap envelope values as fallbacks when flags and env are absent", () =>
     Effect.gen(function* () {
-      const { join } = yield* Path.Path;
-      const baseDir = "/tmp/t3-bootstrap-home";
+      const { join, resolve } = yield* Path.Path;
+      const baseDir = resolve("/tmp/t3-bootstrap-home");
       const fd = yield* openBootstrapFd(
         makeDesktopBootstrap({
           port: 4888,

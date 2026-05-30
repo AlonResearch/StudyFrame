@@ -41,6 +41,8 @@ const TestEnvelopeSchema = Schema.Struct({ mode: Schema.String });
 const encodeTestEnvelopeSchema = Schema.encodeEffect(Schema.fromJsonString(TestEnvelopeSchema));
 
 it.layer(NodeServices.layer)("readBootstrapEnvelope", (it) => {
+  const itEffectSkipOnWindows = process.platform === "win32" ? it.effect.skip : it.effect;
+
   it.effect("uses platform-specific fd paths", () =>
     Effect.sync(() => {
       assert.equal(resolveFdPath(3, "linux"), "/proc/self/fd/3");
@@ -61,7 +63,8 @@ it.layer(NodeServices.layer)("readBootstrapEnvelope", (it) => {
 
       const fd = yield* Effect.acquireRelease(
         Effect.sync(() => NFS.openSync(filePath, "r")),
-        (fd) => Effect.sync(() => NFS.closeSync(fd)),
+        (fd) =>
+          resolveFdPath(fd) === undefined ? Effect.void : Effect.sync(() => NFS.closeSync(fd)),
       );
 
       const payload = yield* readBootstrapEnvelope(TestEnvelopeSchema, fd, { timeoutMs: 100 });
@@ -101,7 +104,9 @@ it.layer(NodeServices.layer)("readBootstrapEnvelope", (it) => {
 
   it.effect("returns none when the fd is unavailable", () =>
     Effect.gen(function* () {
-      const fd = NFS.openSync("/dev/null", "r");
+      const fs = yield* FileSystem.FileSystem;
+      const filePath = yield* fs.makeTempFileScoped({ prefix: "t3-bootstrap-", suffix: ".ndjson" });
+      const fd = NFS.openSync(filePath, "r");
       NFS.closeSync(fd);
 
       const payload = yield* readBootstrapEnvelope(TestEnvelopeSchema, fd, { timeoutMs: 100 });
@@ -109,7 +114,7 @@ it.layer(NodeServices.layer)("readBootstrapEnvelope", (it) => {
     }),
   );
 
-  it.effect("returns none when the bootstrap read times out before any value arrives", () =>
+  itEffectSkipOnWindows("returns none when the bootstrap read times out before any value arrives", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-bootstrap-" });
