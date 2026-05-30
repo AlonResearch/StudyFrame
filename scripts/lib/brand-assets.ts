@@ -1,4 +1,11 @@
 export const BRAND_ASSET_PATHS = {
+  studyframeDesktopIconPng: "assets/studyframe/studyframe-1024.png",
+  studyframeWindowsIconIco: "assets/studyframe/studyframe-windows.ico",
+  studyframeWebFaviconIco: "assets/studyframe/studyframe-web-favicon.ico",
+  studyframeWebFavicon16Png: "assets/studyframe/studyframe-web-favicon-16x16.png",
+  studyframeWebFavicon32Png: "assets/studyframe/studyframe-web-favicon-32x32.png",
+  studyframeWebAppleTouchIconPng: "assets/studyframe/studyframe-web-apple-touch-180.png",
+
   productionMacIconPng: "assets/prod/black-macos-1024.png",
   productionLinuxIconPng: "assets/prod/black-universal-1024.png",
   productionWindowsIconIco: "assets/prod/t3-black-windows.ico",
@@ -59,10 +66,10 @@ const WEB_ICON_SOURCE_PATHS_BY_BRAND = {
     appleTouchIconPng: BRAND_ASSET_PATHS.nightlyWebAppleTouchIconPng,
   },
   production: {
-    faviconIco: BRAND_ASSET_PATHS.productionWebFaviconIco,
-    favicon16Png: BRAND_ASSET_PATHS.productionWebFavicon16Png,
-    favicon32Png: BRAND_ASSET_PATHS.productionWebFavicon32Png,
-    appleTouchIconPng: BRAND_ASSET_PATHS.productionWebAppleTouchIconPng,
+    faviconIco: BRAND_ASSET_PATHS.studyframeWebFaviconIco,
+    favicon16Png: BRAND_ASSET_PATHS.studyframeWebFavicon16Png,
+    favicon32Png: BRAND_ASSET_PATHS.studyframeWebFavicon32Png,
+    appleTouchIconPng: BRAND_ASSET_PATHS.studyframeWebAppleTouchIconPng,
   },
 } as const satisfies Record<WebAssetBrand, Record<keyof typeof WEB_ICON_TARGET_FILENAMES, string>>;
 

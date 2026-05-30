@@ -20,9 +20,9 @@ const defaultEnvironmentInput = {
   platform: "darwin",
   processArch: "arm64",
   appVersion: "1.2.3",
-  appPath: "/Applications/T3 Code.app/Contents/Resources/app.asar",
+  appPath: "/Applications/StudyFrame.app/Contents/Resources/app.asar",
   isPackaged: true,
-  resourcesPath: "/Applications/T3 Code.app/Contents/Resources",
+  resourcesPath: "/Applications/StudyFrame.app/Contents/Resources",
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
@@ -39,7 +39,7 @@ interface ElectronAppCalls {
 const makeElectronAppLayer = (calls: ElectronAppCalls) =>
   Layer.succeed(ElectronApp.ElectronApp, {
     metadata: Effect.die("unexpected metadata read"),
-    name: Effect.succeed("T3 Code"),
+    name: Effect.succeed("StudyFrame"),
     whenReady: Effect.void,
     quit: Effect.void,
     exit: () => Effect.void,
@@ -121,7 +121,7 @@ const withIdentity = <A, E, R>(
             exists: (path) =>
               Effect.succeed(input.legacyPathExists === true && path.includes("T3 Code (Alpha)")),
             readFileString: () =>
-              Effect.succeed(input.packageJson ?? '{"t3codeCommitHash":"abcdef1234567890"}'),
+              Effect.succeed(input.packageJson ?? '{"studyframeCommitHash":"abcdef1234567890"}'),
           }),
         ),
         Layer.provideMerge(makeAssetsLayer(input.pngIconPath ?? Option.none())),
@@ -133,7 +133,7 @@ const withIdentity = <A, E, R>(
 };
 
 describe("DesktopAppIdentity", () => {
-  it.effect("keeps using the legacy userData path when it already exists", () =>
+  it.effect("uses the StudyFrame userData path even when legacy T3 Code data exists", () =>
     withIdentity(
       Effect.gen(function* () {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
@@ -141,7 +141,7 @@ describe("DesktopAppIdentity", () => {
 
         assert.equal(
           userDataPath,
-          NodePath.join("/Users/alice/Library/Application Support", "T3 Code (Alpha)"),
+          NodePath.join("/Users/alice/Library/Application Support", "studyframe"),
         );
       }),
       { legacyPathExists: true },

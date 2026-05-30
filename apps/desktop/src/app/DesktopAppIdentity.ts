@@ -14,6 +14,7 @@ const COMMIT_HASH_PATTERN = /^[0-9a-f]{7,40}$/i;
 const COMMIT_HASH_DISPLAY_LENGTH = 12;
 
 const AppPackageMetadata = Schema.Struct({
+  studyframeCommitHash: Schema.optional(Schema.String),
   t3codeCommitHash: Schema.optional(Schema.String),
 });
 const decodeAppPackageMetadata = Schema.decodeEffect(Schema.fromJsonString(AppPackageMetadata));
@@ -50,7 +51,9 @@ const make = Effect.gen(function* () {
       onSome: (value) =>
         decodeAppPackageMetadata(value).pipe(
           Effect.map((parsed) =>
-            Option.fromNullishOr(parsed.t3codeCommitHash).pipe(Option.flatMap(normalizeCommitHash)),
+            Option.fromNullishOr(parsed.studyframeCommitHash ?? parsed.t3codeCommitHash).pipe(
+              Option.flatMap(normalizeCommitHash),
+            ),
           ),
           Effect.catch(() => Effect.succeed(Option.none<string>())),
         ),
@@ -80,18 +83,9 @@ const make = Effect.gen(function* () {
     return commitHash;
   });
 
-  const resolveUserDataPath = Effect.gen(function* () {
-    const legacyPath = environment.path.join(
-      environment.appDataDirectory,
-      environment.legacyUserDataDirName,
-    );
-    const legacyPathExists = yield* fileSystem
-      .exists(legacyPath)
-      .pipe(Effect.orElseSucceed(() => false));
-    return legacyPathExists
-      ? legacyPath
-      : environment.path.join(environment.appDataDirectory, environment.userDataDirName);
-  }).pipe(Effect.withSpan("desktop.appIdentity.resolveUserDataPath"));
+  const resolveUserDataPath = Effect.sync(() =>
+    environment.path.join(environment.appDataDirectory, environment.userDataDirName),
+  ).pipe(Effect.withSpan("desktop.appIdentity.resolveUserDataPath"));
 
   const configure = Effect.gen(function* () {
     const commitHash = yield* resolveAboutCommitHash;

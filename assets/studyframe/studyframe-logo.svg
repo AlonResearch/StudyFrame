@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="StudyFrame">
+  <defs>
+    <linearGradient id="bg" x1="160" y1="120" x2="864" y2="904" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#16324f"/>
+      <stop offset="0.55" stop-color="#1d6f6a"/>
+      <stop offset="1" stop-color="#f0b84b"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="318" y1="248" x2="706" y2="778" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e9f4f2"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+  <path
+    d="M286 242c0-42 34-76 76-76h300c42 0 76 34 76 76v540c0 42-34 76-76 76H362c-42 0-76-34-76-76V242Z"
+    fill="#0b1724"
+    opacity="0.24"
+  />
+  <path
+    d="M320 210c0-36 29-65 65-65h254c36 0 65 29 65 65v604c0 36-29 65-65 65H385c-36 0-65-29-65-65V210Z"
+    fill="url(#paper)"
+  />
+  <path d="M402 310h220M402 398h220M402 486h154" stroke="#16324f" stroke-width="46" stroke-linecap="round"/>
+  <path
+    d="M690 594c0 95-77 172-172 172S346 689 346 594s77-172 172-172 172 77 172 172Z"
+    fill="#f0b84b"
+    stroke="#16324f"
+    stroke-width="34"
+  />
+  <path d="M518 506v95l72 42" stroke="#16324f" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
