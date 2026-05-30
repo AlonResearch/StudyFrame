@@ -286,7 +286,7 @@ function compactTopicModule(module: StudyTopicModule) {
   };
 }
 
-function compactQuestionSupport(
+export function compactQuestionSupport(
   support: StudyFrameSnapshot["dataset"]["questionSupport"][number] | undefined,
 ) {
   if (!support) return null;
@@ -317,7 +317,7 @@ function chunks<T>(items: readonly T[], size: number): readonly T[][] {
   );
 }
 
-function topicMatchesExpected(actual: string, expected: string): boolean {
+export function topicMatchesExpected(actual: string, expected: string): boolean {
   const actualTokens = new Set(normalizeTopic(actual).split(" "));
   const expectedTokens = normalizeTopic(expected)
     .split(" ")
