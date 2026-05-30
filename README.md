@@ -108,3 +108,13 @@ This is an external course dataset, not the StudyFrame application repository. I
 The inherited T3 Code foundation provides useful navigation, panels, drawers, persistence hooks, and provider connections. Reuse those foundations where they improve the study workflow, but do not preserve coding-agent UX that distracts from studying.
 
 Keep implementation plans, schemas, migrations, and QA details in separate documents. When a technical shortcut conflicts with this README, preserve the student workflow.
+
+## Technical Ground Truth
+
+Use `groundtruth.md` for the traced implementation workflow, runtime topology, contracts,
+persistence, environment specifications, validation pipeline, and current technical review risks.
+
+Update `groundtruth.md` in the same change whenever a technical change alters runtime behavior, data
+contracts, persistence, extraction, provider use, build or release pipelines, required environment
+configuration, validation commands, or known technical risks. Update this README as well when the
+student-facing product contract changes.

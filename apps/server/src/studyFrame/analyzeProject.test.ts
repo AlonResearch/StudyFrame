@@ -269,6 +269,69 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
     }),
   );
 
+  it.effect("materializes provider-selected catalog topics missed by local keywords", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "studyframe-analysis-catalog-" });
+      yield* fs.writeFileString(
+        path.join(root, "quiz-2024.md"),
+        "Question 1\nUse the supplied decomposition to find the reduced representation.",
+      );
+
+      const imported = yield* importFolderToSnapshot({ sourceRoot: root });
+      const questionId = imported.snapshot.dataset.questions[0]?.id;
+      assert.isDefined(questionId);
+      let providerCallCount = 0;
+      const analyzed = yield* analyzeProjectWithProvider(imported.snapshot, {
+        projectId: imported.result.projectId,
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            ServerSettingsService.layerTest(),
+            Layer.succeed(
+              TextGeneration,
+              makeTextGeneration((() => {
+                providerCallCount += 1;
+                return providerCallCount === 1
+                  ? Effect.succeed({
+                      sourceRoles: [],
+                      questionClassifications: [
+                        {
+                          questionId,
+                          topicClusterId: "cluster-pca-dimensionality-reduction",
+                          subtype: "Principal components",
+                          confidence: 0.94,
+                        },
+                      ],
+                    })
+                  : Effect.succeed({
+                      topicModules: [],
+                      questionSupport: [],
+                      practiceItems: [],
+                    });
+              }) as TextGenerationShape["generateStructured"]),
+            ),
+          ),
+        ),
+      );
+
+      assert.equal(analyzed.result.mode, "ai");
+      assert.include(
+        analyzed.snapshot.dataset.topicClusters?.map((cluster) => cluster.id) ?? [],
+        "cluster-pca-dimensionality-reduction",
+      );
+      assert.equal(
+        analyzed.snapshot.dataset.questionTopics[0]?.topicThreadId,
+        "topic-pca-dimensionality-reduction",
+      );
+      assert.include(
+        analyzed.snapshot.dataset.topicModules?.map((module) => module.id) ?? [],
+        "module-pca-dimensionality-reduction",
+      );
+    }),
+  );
+
   it.effect("recomputes normalized views after provider topic correction", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

@@ -37,5 +37,11 @@ it("matches semantic topic naming variants used by the golden guard rails", () =
       "Sampling/filtering/spectral analysis",
     ),
   );
+  assert.isTrue(
+    topicMatchesExpected(
+      "Sampling, filtering, and spectra",
+      "Sampling/filtering/spectral analysis",
+    ),
+  );
   assert.isFalse(topicMatchesExpected("ROC and discrimination", "PCA/dimensionality reduction"));
 });

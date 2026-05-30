@@ -22,6 +22,9 @@ Preserve these invariants:
 
 ## Task Completion Requirements
 
+- Read `groundtruth.md` before technical changes. Update it in the same change whenever runtime
+  behavior, data contracts, persistence, extraction, provider use, build or release pipelines,
+  required environment configuration, validation commands, or known technical risks change.
 - Run `bun fmt`, `bun lint`, and `bun typecheck` before considering tasks complete.
 - Run `bun run test`, never `bun test`.
 - If changing native mobile code, run `bun lint:mobile`.

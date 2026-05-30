@@ -23,7 +23,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import { analyzeProjectSnapshot } from "./analyzeProject.ts";
+import { analyzeProjectSnapshot, makeStudyFrameTopicCatalog } from "./analyzeProject.ts";
 import {
   makeStudyFrameLlmMetadata,
   resolveOptionalStudyFrameTextGeneration,
@@ -149,6 +149,11 @@ export const analyzeProjectWithProvider = Effect.fn("StudyFrame.analyzeProjectWi
 function buildProviderClassificationPrompt(local: StudyAnalyzeProjectResponse): string {
   const dataset = local.snapshot.dataset;
   const projectId = local.result.projectId;
+  const project = dataset.projects.find((candidate) => candidate.id === projectId);
+  const topicCatalog = makeStudyFrameTopicCatalog(
+    projectId,
+    project?.importedAt ?? "1970-01-01T00:00:00.000Z",
+  );
   return [
     `Prompt version: ${STUDYFRAME_CLASSIFICATION_PROMPT_VERSION}`,
     "You are classifying real extracted questions for a study application.",
@@ -161,9 +166,7 @@ function buildProviderClassificationPrompt(local: StudyAnalyzeProjectResponse): 
         sourceDocuments: (dataset.sourceDocuments ?? []).filter(
           (document) => document.projectId === projectId,
         ),
-        topicClusters: (dataset.topicClusters ?? []).filter(
-          (cluster) => cluster.projectId === projectId,
-        ),
+        topicClusters: topicCatalog.clusters,
         questions: dataset.questions
           .filter((question) => question.projectId === projectId && question.isRealQuestion)
           .map((question) => ({
@@ -256,8 +259,13 @@ function applyProviderClassifications(
   enhancement: ProviderClassificationEnhancement,
 ): StudyAnalyzeProjectResponse {
   const dataset = local.snapshot.dataset;
-  const clusterById = new Map(
-    (dataset.topicClusters ?? []).map((cluster) => [cluster.id, cluster]),
+  const project = dataset.projects.find((candidate) => candidate.id === local.result.projectId);
+  const topicCatalog = makeStudyFrameTopicCatalog(
+    local.result.projectId,
+    project?.importedAt ?? "1970-01-01T00:00:00.000Z",
+  );
+  const availableClusterById = new Map(
+    topicCatalog.clusters.map((cluster) => [cluster.id, cluster]),
   );
   const knownQuestionIds = new Set(dataset.questions.map((question) => question.id));
   const enhancementByQuestionId = new Map(
@@ -265,9 +273,29 @@ function applyProviderClassifications(
       .filter(
         (classification) =>
           knownQuestionIds.has(classification.questionId) &&
-          clusterById.has(classification.topicClusterId),
+          availableClusterById.has(classification.topicClusterId),
       )
       .map((classification) => [classification.questionId, classification]),
+  );
+  const selectedClusterIds = new Set(
+    [...enhancementByQuestionId.values()].map((classification) => classification.topicClusterId),
+  );
+  const materializedClusters = appendMissingCatalogEntries(
+    dataset.topicClusters ?? [],
+    topicCatalog.clusters,
+    selectedClusterIds,
+  );
+  const materializedThreads = appendMissingCatalogEntries(
+    dataset.topicThreads,
+    topicCatalog.threads,
+    selectedClusterIds,
+    (thread) => `cluster-${thread.id.replace(/^topic-/, "")}`,
+  );
+  const materializedModules = appendMissingCatalogEntries(
+    dataset.topicModules ?? [],
+    topicCatalog.modules,
+    selectedClusterIds,
+    (module) => module.topicClusterId,
   );
   const questionByCandidateId = makeQuestionByCandidateId(
     dataset.questions,
@@ -281,11 +309,11 @@ function applyProviderClassifications(
     ),
   );
   const topicClusters = recomputeTopicClusters(
-    dataset.topicClusters ?? [],
+    materializedClusters,
     questionClassifications,
     dataset.questionCandidates ?? [],
   );
-  const topicThreads = synchronizeTopicThreads(dataset.topicThreads, topicClusters);
+  const topicThreads = synchronizeTopicThreads(materializedThreads, topicClusters);
   const questionTopics = dataset.questionTopics.map((topic) =>
     mergeQuestionTopic(topic, enhancementByQuestionId, topicClusters, topicThreads),
   );
@@ -294,7 +322,7 @@ function applyProviderClassifications(
     dataset.questions,
     dataset.questionCandidates ?? [],
     enhancementByQuestionId,
-    dataset.topicModules ?? [],
+    materializedModules,
   );
   const sourceDocuments = mergeSourceDocumentRoles(
     dataset.sourceDocuments ?? [],
@@ -318,10 +346,26 @@ function applyProviderClassifications(
         questionTopics,
         topicClusters,
         topicThreads,
+        topicModules: materializedModules,
         practiceItems,
       },
     },
   };
+}
+
+function appendMissingCatalogEntries<T extends { readonly id: string }>(
+  current: readonly T[],
+  catalog: readonly T[],
+  selectedClusterIds: ReadonlySet<string>,
+  clusterId: (entry: T) => string = (entry) => entry.id,
+): T[] {
+  const knownIds = new Set(current.map((entry) => entry.id));
+  return [
+    ...current,
+    ...catalog.filter(
+      (entry) => selectedClusterIds.has(clusterId(entry)) && !knownIds.has(entry.id),
+    ),
+  ];
 }
 
 function applyProviderEnhancement(

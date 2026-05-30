@@ -236,7 +236,8 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
       }
       const candidateId = `candidate-${stableSlug(`${file.relativePath}-${draft.label}-${index + 1}`) || stableHash(`${file.relativePath}-${index}`)}`;
       const questionId = `q-${stableSlug(`${file.relativePath}-${draft.label}-${index + 1}`) || stableHash(candidateId)}`;
-      const dependsOnAssets = embeddedAssetIds.length > 0;
+      const dependsOnAssets =
+        embeddedAssetIds.length > 0 || referencesExternalContext(draft.rawPromptMarkdown);
       const needsManualReview =
         dependsOnAssets || extraction.confidence < 0.8 || documentWarnings.length > 0;
       const pointValue = draft.pointValue ?? 1;
@@ -752,6 +753,19 @@ function looksLikeQuestion(text: string): boolean {
   return (
     text.includes("?") ||
     /\b(compute|calculate|derive|explain|prove|estimate|show|find|choose|state)\b/i.test(text)
+  );
+}
+
+function referencesExternalContext(text: string): boolean {
+  return (
+    /\b[\w.-]+\.(?:csv|mat|pkl|pickle|xlsx?|json|png|jpe?g|gif|bmp|tiff?|pdf)\b/i.test(text) ||
+    /\b(?:data\s+)?file\b/i.test(text) ||
+    /\b(?:given|following|shown|provided|referenced|attached)\s+(?:\w+\s+){0,3}(?:table|matrix|figure|graph|plot|distribution|data)\b/i.test(
+      text,
+    ) ||
+    /\b(?:table|matrix|figure|graph|plot)\s+(?:below|above|provides?|shows?|contains?)\b/i.test(
+      text,
+    )
   );
 }
 

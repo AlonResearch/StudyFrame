@@ -301,6 +301,22 @@ const TOPIC_DEFINITIONS: readonly TopicDefinition[] = [
   },
 ];
 
+export function makeStudyFrameTopicCatalog(projectId: string, now: string) {
+  const topics: TopicAnalysis[] = TOPIC_DEFINITIONS.map((definition) => ({
+    definition,
+    candidates: [],
+    recentQuestionParts: 0,
+    olderQuestionAppearances: 0,
+    weightedPoints: 0,
+    rawPriority: 0,
+  }));
+  return {
+    clusters: makeTopicClusters(projectId, topics, 1),
+    threads: makeTopicThreads(projectId, topics, 1, now),
+    modules: makeTopicModules(projectId, topics),
+  };
+}
+
 export class StudyFrameAnalyzeProjectError extends Data.TaggedError(
   "StudyFrameAnalyzeProjectError",
 )<{

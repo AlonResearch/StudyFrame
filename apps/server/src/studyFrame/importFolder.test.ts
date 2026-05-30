@@ -234,4 +234,35 @@ it.layer(NodeServices.layer)("importFolderToSnapshot", (it) => {
       assert.include(result.warnings.join("\n"), "Vector DOCX asset (WMF)");
     }),
   );
+
+  it.effect("marks questions that reference external context for manual review", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "studyframe-import-context-" });
+      yield* fs.writeFileString(
+        path.join(root, "quiz-2024.md"),
+        [
+          "Question 1",
+          "Use file Q2-2024-data.csv to compute the entropy.",
+          "",
+          "Question 2",
+          "Given the covariance matrix below, find the first principal component.",
+          "",
+          "Question 3",
+          "Compute the firing rate from 8 spikes in 0.5 seconds.",
+        ].join("\n"),
+      );
+
+      const { snapshot } = yield* importFolderToSnapshot({ sourceRoot: root });
+      const candidates = snapshot.dataset.questionCandidates ?? [];
+
+      assert.isTrue(snapshot.dataset.questions[0]?.dependsOnAssets);
+      assert.isTrue(candidates[0]?.needsManualReview);
+      assert.isTrue(snapshot.dataset.questions[1]?.dependsOnAssets);
+      assert.isTrue(candidates[1]?.needsManualReview);
+      assert.isFalse(snapshot.dataset.questions[2]?.dependsOnAssets);
+      assert.isFalse(candidates[2]?.needsManualReview);
+    }),
+  );
 });
