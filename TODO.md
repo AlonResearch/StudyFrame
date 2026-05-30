@@ -1,13 +1,24 @@
-# TODO
+# StudyFrame TODO
 
-## Small things
+## Core Workflow
 
-- [ ] Submitting new messages should scroll to bottom
-- [ ] Only show last 10 threads for a given project
-- [ ] Thread archiving
-- [ ] New projects should go on top
-- [ ] Projects should be sorted by latest thread update
+- [ ] Import raw course folders without derived-artifact contamination.
+- [ ] Preserve images, tables, equations, and source warnings.
+- [ ] Use provider-backed analysis for topic clustering and support generation.
+- [ ] Rank topics initially by exam evidence and later by spaced-review priority.
+- [ ] Keep real questions ahead of generated variants.
+- [ ] Add rubric-aware grading with visible fallback behavior.
+- [ ] Complete mistakes review, score summary, and final report exports.
 
-## Bigger things
+## UX
 
-- [ ] Queueing messages
+- [ ] Keep topic-to-question navigation short and predictable.
+- [ ] Verify split-screen and narrow-viewport layouts.
+- [ ] Keep source context accessible without answer leakage.
+- [ ] Make warnings actionable without blocking unrelated practice.
+
+## Quality
+
+- [ ] Keep the golden Signal/Data Analysis audit passing.
+- [ ] Add browser coverage for the full study loop.
+
