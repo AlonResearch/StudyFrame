@@ -114,6 +114,7 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
       const imported = yield* importFolderToSnapshot({ sourceRoot: root });
       const importedQuestionId = imported.snapshot.dataset.questions[0]?.id;
       assert.isDefined(importedQuestionId);
+      let providerCallCount = 0;
       const generated = analyzeProjectWithProvider(imported.snapshot, {
         projectId: imported.result.projectId,
       }).pipe(
@@ -122,8 +123,21 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
             ServerSettingsService.layerTest(),
             Layer.succeed(
               TextGeneration,
-              makeTextGeneration((() =>
-                Effect.succeed({
+              makeTextGeneration((() => {
+                providerCallCount += 1;
+                if (providerCallCount === 1) {
+                  return Effect.succeed({
+                    questionClassifications: [
+                      {
+                        questionId: importedQuestionId,
+                        topicClusterId: "cluster-spike-train-statistics",
+                        subtype: "Provider rate calculation",
+                        confidence: 0.98,
+                      },
+                    ],
+                  });
+                }
+                return Effect.succeed({
                   topicModules: [
                     {
                       topicClusterId: "cluster-spike-train-statistics",
@@ -154,7 +168,8 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
                       plotChecklistItems: [],
                     },
                   ],
-                })) as TextGenerationShape["generateStructured"]),
+                });
+              }) as TextGenerationShape["generateStructured"]),
             ),
           ),
         ),
@@ -162,6 +177,10 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
       const analyzed = yield* generated;
 
       assert.equal(analyzed.result.mode, "ai");
+      assert.equal(
+        analyzed.snapshot.dataset.questionTopics[0]?.subtype,
+        "Provider rate calculation",
+      );
       assert.equal(
         analyzed.snapshot.dataset.topicModules?.[0]?.theorySummaryMarkdown,
         "Provider theory",
@@ -219,6 +238,96 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
 
       assert.equal(analyzed.result.mode, "local_fallback");
       assert.equal(analyzed.result.classifiedQuestionCount, 1);
+    }),
+  );
+
+  it.effect("recomputes normalized views after provider topic correction", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({
+        prefix: "studyframe-analysis-correction-",
+      });
+      yield* fs.writeFileString(
+        path.join(root, "quiz-2024.md"),
+        [
+          "Question 1 (4 points)",
+          "Compute the firing rate for the spike train.",
+          "",
+          "Question 2 (6 points)",
+          "Compute the entropy of the response distribution.",
+        ].join("\n"),
+      );
+
+      const imported = yield* importFolderToSnapshot({ sourceRoot: root });
+      const rateQuestion = imported.snapshot.dataset.questions.find((question) =>
+        question.rawPrompt.includes("firing rate"),
+      );
+      const entropyQuestion = imported.snapshot.dataset.questions.find((question) =>
+        question.rawPrompt.includes("entropy"),
+      );
+      assert.isDefined(rateQuestion);
+      assert.isDefined(entropyQuestion);
+      const rateCandidate = imported.snapshot.dataset.questionCandidates?.find(
+        (candidate) =>
+          candidate.documentId === rateQuestion.documentId &&
+          candidate.sourceAnchor === rateQuestion.sourceAnchor,
+      );
+      assert.isDefined(rateCandidate);
+      let providerCallCount = 0;
+      const analyzed = yield* analyzeProjectWithProvider(imported.snapshot, {
+        projectId: imported.result.projectId,
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            ServerSettingsService.layerTest(),
+            Layer.succeed(
+              TextGeneration,
+              makeTextGeneration((() => {
+                providerCallCount += 1;
+                if (providerCallCount === 1) {
+                  return Effect.succeed({
+                    questionClassifications: [
+                      {
+                        questionId: rateQuestion.id,
+                        topicClusterId: "cluster-information-theory",
+                        subtype: "Corrected channel-rate subtype",
+                        confidence: 0.88,
+                      },
+                      {
+                        questionId: entropyQuestion.id,
+                        topicClusterId: "cluster-information-theory",
+                        subtype: "Entropy",
+                        confidence: 0.96,
+                      },
+                    ],
+                  });
+                }
+                return Effect.succeed({
+                  topicModules: [],
+                  questionSupport: [],
+                  practiceItems: [],
+                });
+              }) as TextGenerationShape["generateStructured"]),
+            ),
+          ),
+        ),
+      );
+
+      assert.equal(
+        analyzed.snapshot.dataset.questionTopics.find(
+          (topic) => topic.questionId === rateQuestion.id,
+        )?.topicThreadId,
+        "topic-information-theory",
+      );
+      assert.equal(
+        analyzed.snapshot.dataset.practiceItems?.find(
+          (item) => item.sourceQuestionCandidateId === rateCandidate.id,
+        )?.topicModuleId,
+        "module-information-theory",
+      );
+      assert.equal(analyzed.snapshot.dataset.topicClusters?.[0]?.id, "cluster-information-theory");
+      assert.equal(analyzed.snapshot.dataset.topicClusters?.[0]?.recentQuestionParts, 2);
     }),
   );
 });
