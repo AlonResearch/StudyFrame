@@ -127,6 +127,7 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
                   topicModules: [
                     {
                       topicClusterId: "cluster-spike-train-statistics",
+                      priorityRationale: "Recent weighted questions make this topic the priority.",
                       theorySummaryMarkdown: "Provider theory",
                       formulaSheetMarkdown: "$r = N/T$",
                       commonTrapsMarkdown: "- Provider trap",
@@ -164,6 +165,10 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
       assert.equal(
         analyzed.snapshot.dataset.topicModules?.[0]?.theorySummaryMarkdown,
         "Provider theory",
+      );
+      assert.equal(
+        analyzed.snapshot.dataset.topicClusters?.[0]?.priorityRationale,
+        "Recent weighted questions make this topic the priority.",
       );
       assert.deepEqual(analyzed.snapshot.dataset.questionSupport[0]?.expectedAnswer, ["4 Hz"]);
       assert.deepEqual(analyzed.snapshot.dataset.practiceSupport?.[0]?.expectedAnswerJson, [
