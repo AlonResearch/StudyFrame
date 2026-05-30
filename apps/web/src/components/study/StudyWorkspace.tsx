@@ -34,8 +34,7 @@ import {
 } from "~/components/ui/dialog";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { SidebarInset, SidebarTrigger } from "~/components/ui/sidebar";
-import { Input } from "~/components/ui/input";
-import { Textarea } from "~/components/ui/textarea";
+import { StudyAnswerInput } from "~/components/study/StudyAnswerInput";
 import { StudyMarkdown } from "~/components/study/StudyMarkdown";
 import {
   exportFinalReport,
@@ -290,6 +289,7 @@ export function StudyWorkspace() {
                     bestAttempt={getBestAttempt(attempts, activeQuestion.id)}
                     attempts={getAttemptsForQuestion(attempts, activeQuestion.id)}
                     answerInputType={activePracticeItem?.answerInputType ?? "free_text"}
+                    sourceMetadataJson={activePracticeItem?.sourceMetadataJson ?? null}
                     onAnswerDraftChange={(answer) => setAnswerDraft(activeQuestion.id, answer)}
                     onHint={() => requestHint(activeQuestion.id)}
                     onCheckDirection={() => checkDirection(activeQuestion.id)}
@@ -745,6 +745,7 @@ function QuestionPracticePanel({
   bestAttempt,
   attempts,
   answerInputType,
+  sourceMetadataJson,
   onAnswerDraftChange,
   onHint,
   onCheckDirection,
@@ -766,6 +767,7 @@ function QuestionPracticePanel({
   readonly bestAttempt: ReturnType<typeof getBestAttempt>;
   readonly attempts: readonly StudyAttempt[];
   readonly answerInputType: StudyAnswerInputType;
+  readonly sourceMetadataJson: unknown;
   readonly onAnswerDraftChange: (answer: string) => void;
   readonly onHint: () => void;
   readonly onCheckDirection: () => void;
@@ -811,22 +813,12 @@ function QuestionPracticePanel({
               ) : null}
             </div>
           </div>
-          {answerInputType === "numeric" ? (
-            <Input
-              className="h-10"
-              inputMode="decimal"
-              placeholder="Enter a numeric answer"
-              value={answerDraft}
-              onChange={(event) => onAnswerDraftChange(event.target.value)}
-            />
-          ) : (
-            <Textarea
-              className="min-h-44 flex-1"
-              placeholder="Work the real question here..."
-              value={answerDraft}
-              onChange={(event) => onAnswerDraftChange(event.target.value)}
-            />
-          )}
+          <StudyAnswerInput
+            answerDraft={answerDraft}
+            answerInputType={answerInputType}
+            sourceMetadataJson={sourceMetadataJson}
+            onAnswerDraftChange={onAnswerDraftChange}
+          />
         </section>
 
         {latestHint ? (
