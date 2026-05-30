@@ -9,7 +9,7 @@ export const tweets = [
   {
     handle: "Shay_Benshabtay",
     content:
-      "T3 code is not perfect, but it's damn good. Open and fun , I can make my own fork for my uses and use the great tooling with my own needs.",
+      "StudyFrame is not perfect, but it's damn good. Open and fun , I can make my own fork for my uses and use the great tooling with my own needs.",
     link: "https://x.com/Shay_Benshabtay/status/2054668503857156326",
   },
   {
@@ -21,7 +21,7 @@ export const tweets = [
   },
   {
     handle: "developedbyed",
-    content: "might say alpha but T3 code is pretty awesome, really fast too",
+    content: "might say alpha but StudyFrame is pretty awesome, really fast too",
     link: "https://x.com/developedbyed/status/2030627970532921605",
   },
   {
@@ -40,7 +40,7 @@ export const tweets = [
   {
     handle: "BennettBuhner",
     content:
-      "StudyFrame is literally Codex but better; all your favorite models and harnesses, accessible anywhere! The app is great but the website is even greater, so instead of needing to SSH into a machine, T3 IS my SSH!",
+      "StudyFrame is literally Codex but better; all your favorite models and harnesses, accessible anywhere! The app is great but the website is even greater, so instead of needing to SSH into a machine, StudyFrame IS my SSH!",
     excerpt:
       "StudyFrame is literally Codex but better; all your favorite models and harnesses, accessible anywhere.",
     link: "https://x.com/BennettBuhner/status/2054667115697754387",
@@ -53,17 +53,17 @@ export const tweets = [
   {
     handle: "Josikinz",
     content:
-      "T3 code is better because it’s like if the codex Mac app didn’t make my computer run like shit 😋",
+      "StudyFrame is better because it’s like if the codex Mac app didn’t make my computer run like shit 😋",
     link: "https://x.com/Josikinz/status/2030367951694745870",
   },
   {
     handle: "jetpackjoe_",
-    content: "T3 code is pretty alright I guess",
+    content: "StudyFrame is pretty alright I guess",
     link: "https://x.com/jetpackjoe_/status/2054666792933404959",
   },
   {
     handle: "mil000",
-    content: "T3 code saved my relationship!",
+    content: "StudyFrame saved my relationship!",
     link: "https://x.com/mil000/status/2030120041451246071",
   },
   {
@@ -99,7 +99,7 @@ export const tweets = [
   {
     handle: "pocarles",
     content:
-      "Only using Codex and T3 now.\n\nI thought all AI coding harnesses had roughly the same impact. Using StudyFrame taught me how wrong I was. The interface between you and the model changes everything.",
+      "Only using Codex and StudyFrame now.\n\nI thought all AI coding harnesses had roughly the same impact. Using StudyFrame taught me how wrong I was. The interface between you and the model changes everything.",
     excerpt:
       "Using StudyFrame taught me how wrong I was. The interface between you and the model changes everything.",
     link: "https://x.com/pocarles/status/2054673964274758046",
@@ -111,13 +111,13 @@ export const tweets = [
   },
   {
     handle: "iamkaffe",
-    content: "T3Code was the first one to truly care about Linux users.",
+    content: "StudyFrame was the first one to truly care about Linux users.",
     link: "https://x.com/iamkaffe/status/2054675539311411280",
   },
   {
     handle: "uwunetes",
     content:
-      "claude code make me go *whine whine whine* and t3 code make me go woof woof awooooo!!!",
+      "claude code make me go *whine whine whine* and StudyFrame make me go woof woof awooooo!!!",
     link: "https://x.com/uwunetes/status/2054683356022120640",
   },
 ] satisfies Tweet[];

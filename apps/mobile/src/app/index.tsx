@@ -51,7 +51,7 @@ export default function HomeRouteScreen() {
                 letterSpacing: -0.4,
               }}
             >
-              T3 Code
+              StudyFrame
             </RNText>
             <View
               style={{
