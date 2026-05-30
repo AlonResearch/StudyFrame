@@ -2,7 +2,9 @@ import {
   ArrowRightIcon,
   BadgeCheckIcon,
   BookMarkedIcon,
+  ChartNoAxesColumnIncreasingIcon,
   CheckCircle2Icon,
+  CircleAlertIcon,
   CompassIcon,
   EyeIcon,
   FileDownIcon,
@@ -55,7 +57,9 @@ import { installStudyFrameServerSync } from "~/study/studyServerSync";
 import type {
   StudyCompletionSummary,
   StudyDataset,
+  StudyQuestionClassification,
   StudyQuestion,
+  StudyTopicCluster,
   StudyTopicModule,
 } from "~/study/studyTypes";
 import { APP_DISPLAY_NAME } from "~/branding";
@@ -194,6 +198,15 @@ export function StudyWorkspace() {
               }
               warningCount={project?.extractionWarnings.length ?? 0}
             />
+
+            {dataset.topicClusters && dataset.topicClusters.length > 0 ? (
+              <PriorityOverview
+                clusters={dataset.topicClusters.filter(
+                  (cluster) => cluster.projectId === selectedProjectId,
+                )}
+                classifications={dataset.questionClassifications ?? []}
+              />
+            ) : null}
 
             {topicThread ? (
               <TopicHeader
@@ -417,6 +430,87 @@ function MetricTile({
   );
 }
 
+function PriorityOverview({
+  clusters,
+  classifications,
+}: {
+  readonly clusters: readonly StudyTopicCluster[];
+  readonly classifications: readonly StudyQuestionClassification[];
+}) {
+  const orderedClusters = [...clusters].sort(
+    (left, right) => left.priorityRank - right.priorityRank,
+  );
+  if (orderedClusters.length === 0) return null;
+
+  return (
+    <section className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-semibold">
+        <ChartNoAxesColumnIncreasingIcon className="size-4" />
+        Topic priority
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-[64rem] w-full text-left text-xs">
+          <thead className="border-b border-border bg-muted/45 text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2 font-medium">Rank</th>
+              <th className="px-3 py-2 font-medium">Topic</th>
+              <th className="px-3 py-2 font-medium">Priority</th>
+              <th className="px-3 py-2 font-medium">Recent</th>
+              <th className="px-3 py-2 font-medium">Older</th>
+              <th className="px-3 py-2 font-medium">Points</th>
+              <th className="px-3 py-2 font-medium">Confidence</th>
+              <th className="px-3 py-2 font-medium">Subtypes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orderedClusters.map((cluster) => {
+              const confidence = averageClassificationConfidence(classifications, cluster.id);
+              const needsReview = confidence < 0.6 || cluster.id.includes("unclassified");
+              return (
+                <tr key={cluster.id} className="border-b border-border last:border-b-0">
+                  <td className="px-3 py-3 align-top font-semibold">{cluster.priorityRank}</td>
+                  <td className="max-w-72 px-3 py-3 align-top">
+                    <div className="font-medium">{cluster.displayName}</div>
+                    <div className="mt-1 leading-relaxed text-muted-foreground">
+                      {cluster.priorityRationale}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 align-top">
+                    <Badge variant="outline">
+                      {priorityLabelText(cluster.priorityLabel)}{" "}
+                      {Math.round(cluster.priorityScore * 100)}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-3 align-top">{cluster.recentQuestionParts}</td>
+                  <td className="px-3 py-3 align-top">{cluster.olderQuestionAppearances}</td>
+                  <td className="px-3 py-3 align-top">{cluster.weightedPoints}</td>
+                  <td className="px-3 py-3 align-top">
+                    <div className="flex items-center gap-1.5">
+                      {needsReview ? (
+                        <CircleAlertIcon className="size-3.5 text-warning-foreground" />
+                      ) : null}
+                      <span>{Math.round(confidence * 100)}%</span>
+                    </div>
+                  </td>
+                  <td className="max-w-80 px-3 py-3 align-top">
+                    <div className="flex flex-wrap gap-1">
+                      {cluster.subtypes.map((subtype) => (
+                        <Badge key={subtype} size="sm" variant="outline">
+                          {subtype}
+                        </Badge>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function TopicHeader({
   topicName,
   priorityScore,
@@ -546,6 +640,24 @@ function TopicModuleOverview({
       </div>
     </section>
   );
+}
+
+function averageClassificationConfidence(
+  classifications: readonly StudyQuestionClassification[],
+  topicClusterId: string,
+): number {
+  const matching = classifications.filter(
+    (classification) => classification.topicClusterId === topicClusterId,
+  );
+  if (matching.length === 0) return 0;
+  return (
+    matching.reduce((total, classification) => total + classification.confidence, 0) /
+    matching.length
+  );
+}
+
+function priorityLabelText(label: StudyTopicCluster["priorityLabel"]): string {
+  return label.replace("_", " ");
 }
 
 function CompactStat({
