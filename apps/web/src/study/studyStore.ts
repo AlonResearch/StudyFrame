@@ -78,6 +78,7 @@ export interface StudyFrameStoreState {
   readonly repeatNotPerfectRealQuestions: () => void;
   readonly reviewSolutionsOnly: () => void;
   readonly generateSimilarQuestions: () => void;
+  readonly showExhaustionSummary: () => void;
   readonly dismissExhaustionSummary: () => void;
   readonly replaceDataset: (dataset: StudyDataset) => void;
   readonly resetStudyProgress: () => void;
@@ -244,7 +245,6 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
           completionSummaries: exhaustionSummary
             ? [...state.completionSummaries, exhaustionSummary]
             : state.completionSummaries,
-          exhaustionSummaryId: exhaustionSummary?.id ?? state.exhaustionSummaryId,
         });
         void requestStudyFeedback({
           questionId,
@@ -262,6 +262,7 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
 
       revealSolution: (questionId) => {
         const state = get();
+        if (state.solutionOpenQuestionIds[questionId]) return;
         const question = state.dataset.questions.find((candidate) => candidate.id === questionId);
         const topicThreadId = state.selectedTopicThreadId;
         if (!question || !topicThreadId) return;
@@ -297,7 +298,6 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
           completionSummaries: exhaustionSummary
             ? [...state.completionSummaries, exhaustionSummary]
             : state.completionSummaries,
-          exhaustionSummaryId: exhaustionSummary?.id ?? state.exhaustionSummaryId,
         });
       },
 
@@ -477,6 +477,16 @@ export const useStudyFrameStore = create<StudyFrameStoreState>()(
             }));
           })
           .catch(() => undefined);
+      },
+
+      showExhaustionSummary: () => {
+        const state = get();
+        if (!state.selectedTopicThreadId) return;
+        const summary = state.completionSummaries.findLast(
+          (candidate) => candidate.topicThreadId === state.selectedTopicThreadId,
+        );
+        if (!summary) return;
+        set({ exhaustionSummaryId: summary.id });
       },
 
       dismissExhaustionSummary: () => {

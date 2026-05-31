@@ -165,19 +165,122 @@ function deriveTopicModules(
 
   return dataset.topicThreads.map((thread) => {
     const cluster = clusterByThreadId.get(thread.id);
+    const review = getDefaultTopicReview(thread.displayName, thread.summary);
     return {
       id: topicModuleId(thread.id),
       projectId: thread.projectId,
       topicClusterId: cluster?.id ?? topicClusterId(thread.id),
-      theorySummaryMarkdown: thread.summary,
-      formulaSheetMarkdown: "",
+      theorySummaryMarkdown: review.theorySummaryMarkdown,
+      formulaSheetMarkdown: review.formulaSheetMarkdown,
       commonTrapsMarkdown: "",
       subtypeCoverageJson: {
-        subtypes: cluster?.subtypes ?? [],
+        subtypes: cluster?.subtypes ?? review.subtypes,
+        questionPatterns: review.questionPatterns,
+        studyFlow: review.studyFlow,
       },
       firstExposureComplete: thread.firstExposureComplete,
     };
   });
+}
+
+function getDefaultTopicReview(
+  displayName: string,
+  summary: string,
+): {
+  readonly theorySummaryMarkdown: string;
+  readonly formulaSheetMarkdown: string;
+  readonly subtypes: readonly string[];
+  readonly questionPatterns: readonly string[];
+  readonly studyFlow: readonly string[];
+} {
+  const normalized = displayName.toLowerCase();
+  if (normalized.includes("spike-train")) {
+    return {
+      theorySummaryMarkdown: [
+        "Spike-train questions ask you to summarize event times without losing the distinction between count variability and interval variability.",
+        "",
+        "- Use firing rate when the question gives spike counts and a recording duration.",
+        "- Use Fano factor when counts vary across equal windows or repeated trials.",
+        "- Use CV when the data are inter-spike intervals.",
+        "- Compare results to the Poisson benchmark: `FF = 1`, `CV = 1`, exponential ISIs, and constant hazard.",
+        "- Refractory periods, bursting, and modulation are common reasons real neurons deviate from Poisson.",
+      ].join("\n"),
+      formulaSheetMarkdown: [
+        "- Mean firing rate: $r = N_{spikes} / T$",
+        "- Poisson expected count: $\\lambda = rT$",
+        "- Fano factor: $FF = Var[N] / E[N]$",
+        "- Coefficient of variation: $CV = \\sigma_{ISI} / \\mu_{ISI}$",
+        "- Poisson ISI density: $p(\\tau) = r e^{-r\\tau}$",
+        "- Hazard: $h(\\tau)$ is the instantaneous firing probability given no spike yet.",
+      ].join("\n"),
+      subtypes: [
+        "Firing rate",
+        "Fano factor",
+        "Coefficient of variation",
+        "Inter-spike intervals",
+        "Hazard and refractory logic",
+      ],
+      questionPatterns: [
+        "Given spike counts across trials or windows, compute rate, variance, and Fano factor.",
+        "Given ISIs, compute mean interval, CV, and regularity relative to Poisson.",
+        "Given a spike-generation rule, reason about hazard, refractoriness, and whether the process is Poisson-like.",
+      ],
+      studyFlow: [
+        "Identify whether the random quantity is count, interval, or hazard.",
+        "Convert time units before computing rates.",
+        "Compute the requested statistic.",
+        "Compare with the Poisson benchmark and state the interpretation.",
+      ],
+    };
+  }
+
+  if (normalized.includes("information theory")) {
+    return {
+      theorySummaryMarkdown: [
+        "Information-theory questions measure uncertainty and how much uncertainty drops after observing data.",
+        "",
+        "- Start by writing the probability table and checking that probabilities sum to one.",
+        "- Compute marginal probabilities before entropy or mutual information.",
+        "- Entropy measures uncertainty; conditional entropy measures uncertainty left after observing another variable.",
+        "- Mutual information is the reduction in uncertainty and is zero for independent variables.",
+        "- Spike-pattern entropy can exceed spike-count entropy because timing patterns can share the same count.",
+      ].join("\n"),
+      formulaSheetMarkdown: [
+        "- Surprise: $h(x) = -\\log_2 p(x)$",
+        "- Entropy: $H(X) = -\\sum_x p(x)\\log_2 p(x)$",
+        "- Joint entropy: $H(X,Y) = -\\sum_x\\sum_y p(x,y)\\log_2 p(x,y)$",
+        "- Conditional entropy: $H(X\\mid Y) = H(X,Y) - H(Y)$",
+        "- Mutual information: $I(X;Y) = H(X) - H(X\\mid Y)$",
+        "- Equivalent: $I(X;Y) = H(X) + H(Y) - H(X,Y)$",
+      ].join("\n"),
+      subtypes: [
+        "Entropy",
+        "Joint entropy",
+        "Conditional entropy",
+        "Mutual information",
+        "Spike-pattern entropy",
+      ],
+      questionPatterns: [
+        "Given a probability table, compute entropy, joint entropy, conditional entropy, and mutual information.",
+        "Given neural responses and stimuli, estimate entropy and information from empirical distributions.",
+        "Compare spike-count entropy with spike-pattern entropy and explain what timing adds.",
+      ],
+      studyFlow: [
+        "Build the probability table.",
+        "Check normalization and compute marginals.",
+        "Choose the entropy identity that matches the question.",
+        "Compute in bits and explain the interpretation.",
+      ],
+    };
+  }
+
+  return {
+    theorySummaryMarkdown: summary,
+    formulaSheetMarkdown: "",
+    subtypes: [],
+    questionPatterns: [],
+    studyFlow: [],
+  };
 }
 
 function derivePracticeItems(

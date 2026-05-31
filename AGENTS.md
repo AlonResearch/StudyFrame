@@ -32,6 +32,12 @@ Preserve these invariants:
 - If changing native mobile code, run `bun lint:mobile`.
 - For StudyFrame workflow changes, run the narrowest relevant `qa:studyframe:*` command while iterating and `bun run qa:studyframe:release` before completion when the golden dataset is available.
 
+## Browser Verification
+
+- For StudyFrame UI changes, run `bun run qa:studyframe:ux` first. It is the default headless Chromium regression check.
+- Use detached Playwright Chromium only when full-app startup, integration behavior, or real testing needs coverage beyond the UX suite.
+- Start the full local stack before detached inspection;
+
 ## Package Roles
 
 - `apps/server`: backend, StudyFrame HTTP services, SQLite persistence, provider integration, and inherited runtime infrastructure.
@@ -66,20 +72,7 @@ StudyFrame is a downstream fork of T3 Code. Read `docs/studyframe-upstream.md` b
 
 Pull useful upstream provider, security, desktop, settings, and runtime changes into StudyFrame. Do not preserve coding-agent UX when it conflicts with the study workflow, and do not shape StudyFrame work for an upstream PR unless explicitly requested.
 
-## StudyFrame Self-Correction Protocol
+## StudyFrame QA
 
-When asked to validate or improve StudyFrame:
-
-1. Record `git status --short`.
-2. Run `bun run qa:studyframe:fast`.
-3. Run `bun run qa:studyframe:golden`.
-4. Run `bun run qa:studyframe:ux`.
-5. Read the generated JSON and markdown QA reports.
-6. Patch only this application repository. Never modify the external golden dataset, manifest expectations, or golden reference markdown to hide failures.
-7. Rerun the narrowest failing command.
-8. After it passes, rerun `bun run qa:studyframe:release`.
-9. Stop after three unsuccessful correction cycles and report the repeated blocker with evidence.
-
-Allowed automatic changes include application code, tests, selectors, extraction logic, prompts, schemas, migrations, UI layout, and accessibility metadata.
-
-Forbidden automatic changes include external golden dataset files, expected topic-ranking guard rails, minimum coverage thresholds, no-leakage rules, real-question-first rules, and exclusion-manifest entries unless a newly discovered derived artifact is documented in the QA report.
+For validation or self-correction tasks, follow `QAGuidelines.md`. Treat the external golden dataset and
+its guard rails as input-only; fix application code instead of weakening QA expectations.

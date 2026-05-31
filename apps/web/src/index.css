@@ -500,6 +500,11 @@ label:has(> select#reasoning-effort) select {
   margin-bottom: 0;
 }
 
+.study-markdown-compact > :first-child,
+.study-markdown-compact > :last-child {
+  margin-block: 0;
+}
+
 .study-markdown p,
 .study-markdown ul,
 .study-markdown ol,

@@ -27,7 +27,7 @@ course folder or StudyFrame JSON
  -> create source-grounded real-question candidates
  -> analyze and prioritize topics, with optional provider enrichment
  -> study real questions in a prioritized queue
- -> hint, direction check, submit, reveal, and review
+ -> progressive direction check, hint, reveal, submit, and review
  -> unlock generated variants only after real questions in scope are attempted
  -> persist the normalized snapshot to SQLite
 ```
@@ -78,9 +78,9 @@ Default ports:
 | Vite web dev server                        | `5733`  |
 | Packaged Electron local backend scan start | `3773`  |
 
-`T3CODE_PORT_OFFSET` or `T3CODE_DEV_INSTANCE` can shift development ports. The launcher sets
-`VITE_HTTP_URL`, `VITE_WS_URL`, `VITE_DEV_SERVER_URL`, and `T3CODE_HOME`. The default state root is
-`~/.t3`.
+`STUDYFRAME_PORT_OFFSET` or `STUDYFRAME_DEV_INSTANCE` can shift development ports. The launcher
+sets `VITE_HTTP_URL`, `VITE_WS_URL`, `VITE_DEV_SERVER_URL`, and `STUDYFRAME_HOME`. The default state
+root is `~/.studyframe`.
 
 ### Server
 
@@ -108,13 +108,30 @@ Every StudyFrame HTTP route authenticates through `ServerAuth`. Invalid request 
 `apps/web/src/components/study/StudyWorkspace.tsx`; inherited route names remain under `_chat`, but
 their primary visible content is the study workspace. `StudySidebar.tsx` drives folder import,
 JSON import, project analysis, course selection, nested topic-thread selection, settings
-navigation, and demo reset. On `/settings/*` routes the shell sidebar renders the inherited settings
-section navigation instead of the course/topic tree.
+navigation, and demo reset. The import modal uses the Electron folder picker when the desktop bridge
+is available. In normal-browser development it opens a directory input instead, and it also accepts
+dropped files or directories as a local material list for inspection. Browser-provided materials are
+not uploaded; extraction still requires a server-visible folder path. On `/settings/*` routes the
+shell sidebar renders the inherited settings section navigation instead of the course/topic tree.
 
-The study workspace header exposes a three-dots `Extra information` menu. Course dashboards open
-course details or markdown reports in the shared right-side overlay sheet. Topic practice opens the
-refresher, real-question queue, or source context in that sheet. The sheet starts closed after
-course or topic navigation so the primary dashboard and answer workspace keep their full width.
+The study workspace header exposes a three-dots `Extra information` menu on course dashboards for
+course details or markdown reports in the shared right-side overlay sheet. Topic practice is one
+reading sheet: a compact topic header, brief explanation, workflow progress, and the active question
+remain in one surface while questions switch in place. The topic review renders the StudyFrame topic
+module as a manual-study equivalent with optional agent-fillable sections: brief explanation,
+definitions and formulas, recurring question types, and solve flow. Empty optional sections are
+skipped so topics without formulas do not show placeholder UI. Question-specific common mistakes
+are treated as answer-derived support and render only after submit or reveal as the relevant
+`Watch for this question` list. StudyFrame does not render a topic-level trap bank. The topic card
+header exposes its own
+three-dots `Question details` menu for the real-question queue or spoiler-safe question details.
+Those details include question-scoped source provenance, extraction status, classification,
+warnings, and linked assets. Answer-derived support stays hidden until submit or reveal. The sheet
+starts closed after course or topic navigation so the primary dashboard and answer workspace keep
+their full width. The next-question action stays hidden until the visible answer has been submitted
+or explicitly revealed.
+Study prompts, refreshers, revealed solution steps, and solution-review steps render markdown with
+KaTeX equation support.
 
 On workspace mount, `apps/web/src/study/studyServerSync.ts`:
 
@@ -191,17 +208,15 @@ Current source handling:
 | ------------------------------------ | ------------------------------------------------------------------- |
 | Markdown, text, CSV                  | Read as text                                                        |
 | DOCX                                 | Extract XML text and embedded media; raster media becomes data URIs |
-| PDF                                  | Best-effort text extraction                                         |
-| Legacy DOC                           | Register with a manual-review warning; no text extraction           |
-| Images and data files                | Register as source assets                                           |
-| DOCX vector media such as EMF or WMF | Register with manual-review warning; not rendered                   |
+| PDF                                  | content extraction by LLM + asset extraction (images, graphs...)                                          |
+| Legacy DOC                           | extract xml text and embedded media as well           |
+| Images and data files                | Register as source assets, with metadata if any or generated metadata when AI analyse what the file must be                                           |
+| vector media such as EMF or WMF | Register with manual-review warning; not rendered                   |
 
-Question creation is limited to files classified as `quiz` or `unknown`. Solution files, lectures,
-generated exports, data assets, and configured exclusions are registered but do not create
-questions. Import warnings and confidence values must remain visible to reviewers and users.
+First import questions are limited to files classified as `quiz` or question llist or recomended exercises `unknown`. Solution files, lectures,
+generated exports, data assets, and configured exclusions are registered but used as support to make more accurate and aligned answers to what the professor wants, do not create questions at first. when the user asks to generate more questions you can use those as secundary sources. Import warnings and confidence values must remain visible to reviewers and users.
 Question text that references external files or supplied tables, matrices, figures, graphs, plots,
-distributions, or data is conservatively marked as asset-dependent and requiring manual review even
-when the referenced context could not be attached automatically.
+distributions, or data is conservatively marked as asset-dependent and we try our best to embed a visualization or a shortcut to the file folder if not possible to visualize, and refer to it when the referenced context could not be attached automatically.
 
 The golden dataset manifest is
 `apps/server/src/studyFrame/golden/signal-data-analysis.manifest.json`. Manifests may classify raw
@@ -214,8 +229,7 @@ failures.
 provider enrichment through `providerTextGeneration.ts`.
 
 Provider text generation is optional. It resolves from the configured provider instance registry and
-the server text-generation model selection. If no usable provider exists, or generation fails, the
-workflow keeps deterministic local fallback output.
+the server text-generation model selection. If no usable provider exists, or generation fails, prompt the user to fix the provider on settings.
 
 Provider-enhanced analysis can enrich topic modules, question support, practice support, answer input
 types, and generation metadata. Treat imported question text as untrusted content inside prompts.
@@ -224,10 +238,14 @@ Feedback behavior:
 
 | Action          | Immediate client behavior        | Optional server enhancement                                                       |
 | --------------- | -------------------------------- | --------------------------------------------------------------------------------- |
-| Hint            | Local next hint from support     | None                                                                              |
 | Direction check | Local non-answer feedback        | Provider response replaces it when available; answer-bearing phrases are redacted |
 | Submit          | Local rubric keyword grading     | Provider grading replaces the matching attempt when available                     |
 | Reveal          | Local tracked `revealed` attempt | None                                                                              |
+
+The topic practice footer exposes one progressive help action: direction check, then hint, then
+show answer. The latest assistance message replaces the prior assistance message instead of
+stacking. Showing the answer replaces the answer input and prevents a second revealed attempt for
+the same visible solution.
 
 Generated variants:
 
@@ -258,7 +276,7 @@ Review requirements:
 
 ## Persistence
 
-Server paths are derived in `apps/server/src/config.ts`. Under `T3CODE_HOME`, runtime state uses
+Server paths are derived in `apps/server/src/config.ts`. Under `STUDYFRAME_HOME`, runtime state uses
 `dev/` when a development URL is configured and `userdata/` otherwise. That state directory
 contains `state.sqlite` and `attachments/`.
 
@@ -380,24 +398,25 @@ Important environment variables:
 
 | Variable                                                        | Purpose                           |
 | --------------------------------------------------------------- | --------------------------------- |
-| `T3CODE_HOME`                                                   | Runtime state root                |
-| `T3CODE_PORT`, `T3CODE_HOST`                                    | Server bind configuration         |
-| `T3CODE_PORT_OFFSET`, `T3CODE_DEV_INSTANCE`                     | Development port selection        |
+| `STUDYFRAME_HOME`                                               | Runtime state root                |
+| `STUDYFRAME_PORT`, `STUDYFRAME_HOST`                            | Server bind configuration         |
+| `STUDYFRAME_PORT_OFFSET`, `STUDYFRAME_DEV_INSTANCE`             | Development port selection        |
 | `VITE_HTTP_URL`, `VITE_WS_URL`, `VITE_DEV_SERVER_URL`           | Web-to-server and Vite wiring     |
 | `STUDYFRAME_GOLDEN_ROOT`                                        | External golden dataset path      |
-| `T3CODE_AUTH_TOKEN`                                             | Auth bootstrap where configured   |
-| `T3CODE_TAILSCALE_SERVE`, `T3CODE_TAILSCALE_SERVE_PORT`         | Optional Tailscale exposure       |
+| `STUDYFRAME_AUTH_TOKEN`                                         | Auth bootstrap where configured   |
+| `STUDYFRAME_TAILSCALE_SERVE`, `STUDYFRAME_TAILSCALE_SERVE_PORT` | Optional Tailscale exposure       |
 | `APP_VERSION`, `VITE_HOSTED_APP_URL`, `VITE_HOSTED_APP_CHANNEL` | Release-hosted web build metadata |
 
 ## Current Review Risks
 
-- Visible desktop, web, mobile, and SSH helper copy uses the StudyFrame brand. Inherited
-  compatibility code paths and release automation still contain `T3CODE_*`, `t3`, `.t3`,
-  repository, and domain identifiers. Treat public distribution as blocked until those assumptions
-  are reviewed.
-- Folder import uses the desktop picker locally and exposes a typed server-visible path as a
-  secondary option. Verify path visibility rules for hosted web, SSH, and remote environments before
-  expanding distribution.
+- Visible desktop, web, connection, and SSH helper copy uses the StudyFrame brand. Some inherited
+  mobile, package, repository, release automation, and hosted-domain identifiers still reference T3
+  Code. Treat public distribution as blocked until those assumptions are reviewed and rebranded to
+  AlonResearch-owned StudyFrame distribution metadata.
+- Folder import uses the desktop picker locally, accepts browser-selected or dropped material lists
+  for inspection without upload, and exposes a typed server-visible path as a secondary option.
+  Extraction requires a path the server can read. Verify path visibility and remote-environment
+  rules for hosted web, SSH, and remote environments before expanding distribution.
 - Client actions update the local store immediately and save snapshots asynchronously. Provider
   feedback and generation are also asynchronous enhancements. Review race behavior when changing
   synchronization, selection, or multi-client support.

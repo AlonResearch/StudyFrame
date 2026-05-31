@@ -61,8 +61,19 @@ describe("StudyWorkspace", () => {
   }
 
   async function openExtraInfoSection(name: string) {
-    await page.getByRole("button", { name: "Extra information", exact: true }).click();
+    const questionDetails = page.getByRole("button", { name: "Question details", exact: true });
+    if (await questionDetails.query()) {
+      await questionDetails.click();
+    } else {
+      await page.getByRole("button", { name: "Extra information", exact: true }).click();
+    }
     await page.getByRole("menuitem", { name, exact: true }).click();
+  }
+
+  async function showCurrentAnswer() {
+    await page.getByRole("button", { name: "Check direction", exact: true }).click();
+    await page.getByRole("button", { name: "Hint", exact: true }).click();
+    await page.getByRole("button", { name: "Show answer", exact: true }).click();
   }
 
   it("starts on the course dashboard with learning tracker and priority statistics", async () => {
@@ -106,10 +117,24 @@ describe("StudyWorkspace", () => {
     await expect
       .element(page.getByRole("button", { name: "Generate similar questions", exact: true }))
       .not.toBeInTheDocument();
+    await expect
+      .element(page.getByRole("heading", { name: "Brief explanation", exact: true }))
+      .toBeVisible();
+    await expect.element(page.getByText("What this topic is about", { exact: true })).toBeVisible();
+    await expect
+      .element(page.getByText("Use firing rate when the question gives spike counts"))
+      .toBeVisible();
+    await expect.element(page.getByText("Definitions and formulas", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("Recurring question types", { exact: true })).toBeVisible();
+    await expect
+      .element(page.getByText("How these questions usually work", { exact: true }))
+      .toBeVisible();
+    await expect.element(page.getByText("Solve flow", { exact: true })).toBeVisible();
+    await expect
+      .element(page.getByText("Convert milliseconds to seconds before computing Hz."))
+      .not.toBeInTheDocument();
 
-    await openExtraInfoSection("Refresher");
-    await expect.element(page.getByText("Theory summary", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Question queue", exact: true }).click();
+    await openExtraInfoSection("Question queue");
     await expect
       .element(page.getByText("Real-question queue", { exact: true }))
       .toBeInTheDocument();
@@ -125,20 +150,44 @@ describe("StudyWorkspace", () => {
     await expect.element(page.getByText("Solution", { exact: true })).not.toBeInTheDocument();
     await expect.element(page.getByText("16 Hz", { exact: true })).not.toBeInTheDocument();
 
-    await page.getByRole("button", { name: "Source context", exact: true }).click();
-    await expect.element(page.getByText("96% confidence", { exact: true })).toBeInTheDocument();
+    await page.getByRole("button", { name: "Question details", exact: true }).click();
+    await expect.element(page.getByText("High confidence", { exact: true })).toBeInTheDocument();
     await page.getByRole("button", { name: "Question queue", exact: true }).click();
     await page.getByRole("button", { name: "Close extra information", exact: true }).click();
 
+    await page.getByRole("button", { name: "Check direction", exact: true }).click();
+    await expect.element(page.getByText("Direction check", { exact: true })).toBeInTheDocument();
     await page.getByRole("button", { name: "Hint", exact: true }).click();
     await expect
       .element(page.getByText("Start by converting the observation window into seconds."))
       .toBeInTheDocument();
+    await expect
+      .element(page.getByText("Direction check", { exact: true }))
+      .not.toBeInTheDocument();
     await expect.element(page.getByText("16 Hz", { exact: true })).not.toBeInTheDocument();
 
-    await page.getByRole("button", { name: "Reveal solution", exact: true }).click();
-    await expect.element(page.getByText("Solution", { exact: true })).toBeInTheDocument();
+    await page.getByRole("button", { name: "Show answer", exact: true }).click();
+    await expect.element(page.getByText("Answer review", { exact: true })).toBeInTheDocument();
+    await expect.element(page.getByText("Worked answer", { exact: true })).toBeInTheDocument();
+    await expect
+      .element(page.getByText("Watch for this question", { exact: true }))
+      .toBeInTheDocument();
+    await expect
+      .element(page.getByText("Topic trap bank", { exact: true }))
+      .not.toBeInTheDocument();
     await expect.element(page.getByText(/16 Hz/).first()).toBeInTheDocument();
+    await expect
+      .element(page.getByText("Using 500 instead of 0.5 seconds."))
+      .toBeInTheDocument();
+    await expect
+      .element(page.getByText("Convert milliseconds to seconds before computing Hz."))
+      .not.toBeInTheDocument();
+    await expect
+      .element(page.getByPlaceholder("Work the real question here..."))
+      .not.toBeInTheDocument();
+    await expect
+      .element(page.getByRole("button", { name: "Show answer", exact: true }))
+      .not.toBeInTheDocument();
   });
 
   it("keeps source context behind the right metadata tab", async () => {
@@ -147,8 +196,8 @@ describe("StudyWorkspace", () => {
     await expect
       .element(page.getByRole("button", { name: "Close extra information", exact: true }))
       .not.toBeInTheDocument();
-    await openExtraInfoSection("Source context");
-    await expect.element(page.getByText("96% confidence", { exact: true })).toBeVisible();
+    await openExtraInfoSection("About this question");
+    await expect.element(page.getByText("High confidence", { exact: true })).toBeVisible();
     await expect
       .element(page.getByText("Question support", { exact: true }))
       .not.toBeInTheDocument();
@@ -168,7 +217,7 @@ describe("StudyWorkspace", () => {
       );
     await page.getByRole("button", { name: "Check direction", exact: true }).click();
     await expect.element(page.getByText("Direction check", { exact: true })).toBeInTheDocument();
-    await expect.element(page.getByText("Solution", { exact: true })).not.toBeInTheDocument();
+    await expect.element(page.getByText("Answer review", { exact: true })).not.toBeInTheDocument();
 
     await page.getByRole("button", { name: "Submit", exact: true }).click();
     await expect.element(page.getByText("Feedback", { exact: true })).toBeInTheDocument();
@@ -177,24 +226,51 @@ describe("StudyWorkspace", () => {
     await expect
       .element(page.getByText("Expected answer markers", { exact: true }))
       .not.toBeInTheDocument();
-    await expect.element(page.getByText("Solution", { exact: true })).toBeInTheDocument();
-    await openExtraInfoSection("Source context");
+    await expect.element(page.getByText("Answer review", { exact: true })).toBeInTheDocument();
+    await openExtraInfoSection("About this question");
     await expect
       .element(page.getByText("Expected answer markers", { exact: true }))
       .toBeInTheDocument();
   });
 
+  it("renders equations inside revealed solution steps", async () => {
+    useStudyFrameStore.getState().replaceDataset({
+      ...studySeedData,
+      questionSupport: studySeedData.questionSupport.map((support) =>
+        support.questionId === "q-info-2024-mutual-info"
+          ? {
+              ...support,
+              solutionSteps: ["Compute $H(S)=1$ bit before evaluating $H(S\\mid R)$."],
+            }
+          : support,
+      ),
+    });
+    useStudyFrameStore.getState().selectTopicThread("topic-information-theory");
+    await renderWorkspace();
+
+    await showCurrentAnswer();
+
+    expect(document.querySelector(".katex")).not.toBeNull();
+    expect(document.body.textContent).not.toContain("$H(S)=1$");
+  });
+
   it("unlocks generated practice only after all real questions are attempted", async () => {
     await openSpikeTrainTopic();
 
-    await page.getByRole("button", { name: "Reveal solution", exact: true }).click();
-    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await showCurrentAnswer();
+    await page.getByRole("button", { name: "Next question", exact: true }).click();
     await expect
       .element(page.getByText(/Given inter-spike intervals with mean 25 ms/))
       .toBeInTheDocument();
-    await page.getByRole("button", { name: "Reveal solution", exact: true }).click();
+    await expect
+      .element(page.getByRole("heading", { name: "Brief explanation", exact: true }))
+      .toBeVisible();
+    await showCurrentAnswer();
 
     const dialog = page.getByRole("dialog", { name: "You finished all real questions." });
+    await expect.element(page.getByText("Feedback", { exact: true })).toBeInTheDocument();
+    await expect.element(dialog).not.toBeInTheDocument();
+    await page.getByRole("button", { name: "View results", exact: true }).click();
     await expect.element(dialog).toBeInTheDocument();
     await expect
       .element(
@@ -214,10 +290,12 @@ describe("StudyWorkspace", () => {
   it("offers a solution-review mode after exhausting real questions", async () => {
     await openSpikeTrainTopic();
 
-    await page.getByRole("button", { name: "Reveal solution", exact: true }).click();
-    await page.getByRole("button", { name: "Next", exact: true }).click();
-    await page.getByRole("button", { name: "Reveal solution", exact: true }).click();
+    await showCurrentAnswer();
+    await page.getByRole("button", { name: "Next question", exact: true }).click();
+    await showCurrentAnswer();
     const dialog = page.getByRole("dialog", { name: "You finished all real questions." });
+    await expect.element(dialog).not.toBeInTheDocument();
+    await page.getByRole("button", { name: "View results", exact: true }).click();
     await dialog.getByRole("button", { name: "Review solutions only", exact: true }).click();
 
     await expect.element(page.getByText("Solution review", { exact: true })).toBeInTheDocument();
@@ -300,6 +378,41 @@ describe("StudySidebar", () => {
     expect(useStudyFrameStore.getState().selectedTopicThreadId).toBe("topic-information-theory");
   });
 
+  it("keeps the opened topic highlighted and moves the highlight when another topic opens", async () => {
+    await renderSidebar();
+
+    const spikeTrainRow = page.getByTestId("topic-row-topic-spike-train-statistics");
+    const informationTheoryRow = page.getByTestId("topic-row-topic-information-theory");
+    const rowBackground = (testId: string) =>
+      getComputedStyle(document.querySelector(`[data-testid="${testId}"]`)!).backgroundColor;
+    const inactiveInformationTheoryBackground = rowBackground("topic-row-topic-information-theory");
+    await expect.element(spikeTrainRow).toHaveAttribute("data-active", "false");
+    await expect.element(informationTheoryRow).toHaveAttribute("data-active", "false");
+
+    await informationTheoryRow.hover();
+    expect(rowBackground("topic-row-topic-information-theory")).not.toBe(
+      inactiveInformationTheoryBackground,
+    );
+
+    await informationTheoryRow.click();
+    await spikeTrainRow.hover();
+
+    await expect.element(spikeTrainRow).toHaveAttribute("data-active", "false");
+    await expect.element(informationTheoryRow).toHaveAttribute("data-active", "true");
+    expect(rowBackground("topic-row-topic-information-theory")).not.toBe(
+      inactiveInformationTheoryBackground,
+    );
+
+    await spikeTrainRow.click();
+    await informationTheoryRow.hover();
+
+    await expect.element(spikeTrainRow).toHaveAttribute("data-active", "true");
+    await expect.element(informationTheoryRow).toHaveAttribute("data-active", "false");
+    expect(rowBackground("topic-row-topic-spike-train-statistics")).not.toBe(
+      inactiveInformationTheoryBackground,
+    );
+  });
+
   it("imports example course JSON and resets demo progress", async () => {
     await renderSidebar();
 
@@ -309,6 +422,18 @@ describe("StudySidebar", () => {
     await expect
       .element(dialog.getByRole("button", { name: "Open folder", exact: true }))
       .toBeInTheDocument();
+    await expect
+      .element(dialog.getByText("Drag and drop materials or folders to list them"))
+      .toBeInTheDocument();
+    const directoryClick = vi
+      .spyOn(HTMLInputElement.prototype, "click")
+      .mockImplementation(() => {});
+    await dialog.getByRole("button", { name: "Open folder", exact: true }).click();
+    expect(directoryClick).toHaveBeenCalledOnce();
+    directoryClick.mockRestore();
+    await expect
+      .element(dialog.getByRole("button", { name: "Extract sources", exact: true }))
+      .toBeDisabled();
     await expect
       .element(dialog.getByRole("button", { name: "Check priorities", exact: true }))
       .toBeDisabled();

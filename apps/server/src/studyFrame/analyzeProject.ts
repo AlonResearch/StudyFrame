@@ -32,6 +32,8 @@ interface TopicDefinition {
   readonly theory: string;
   readonly formulas: string;
   readonly traps: readonly string[];
+  readonly questionPatterns?: readonly string[];
+  readonly studyFlow?: readonly string[];
   readonly hint: string;
 }
 
@@ -83,12 +85,39 @@ const TOPIC_DEFINITIONS: readonly TopicDefinition[] = [
     ],
     defaultSubtype: "Information measures",
     summary: "Entropy and information measures used to quantify uncertainty and dependence.",
-    theory:
-      "Entropy quantifies uncertainty in a random variable. Mutual information quantifies how much observing one variable reduces uncertainty about another.",
-    formulas: "- $H(X) = -\\sum_x p(x)\\log_2 p(x)$\n- $I(X;Y) = H(X) - H(X\\mid Y)$",
+    theory: [
+      "Information-theory questions measure uncertainty and how much uncertainty drops after observing data.",
+      "",
+      "- Start by writing the probability table and checking that probabilities sum to one.",
+      "- Compute marginal probabilities before entropy or mutual information.",
+      "- Entropy measures uncertainty; conditional entropy measures uncertainty left after observing another variable.",
+      "- Mutual information is the reduction in uncertainty and is zero for independent variables.",
+      "- Spike-pattern entropy can exceed spike-count entropy because timing patterns can share the same count.",
+    ].join("\n"),
+    formulas: [
+      "- Surprise: $h(x) = -\\log_2 p(x)$",
+      "- Entropy: $H(X) = -\\sum_x p(x)\\log_2 p(x)$",
+      "- Joint entropy: $H(X,Y) = -\\sum_x\\sum_y p(x,y)\\log_2 p(x,y)$",
+      "- Conditional entropy: $H(X\\mid Y) = H(X,Y) - H(Y)$",
+      "- Mutual information: $I(X;Y) = H(X) - H(X\\mid Y)$",
+      "- Equivalent: $I(X;Y) = H(X) + H(Y) - H(X,Y)$",
+    ].join("\n"),
     traps: [
-      "Mixing logarithm bases.",
-      "Using marginal probabilities where joint probabilities are required.",
+      "Use base-2 logarithms when answers are in bits.",
+      "Do not replace joint probabilities with marginal probabilities.",
+      "Joint entropy equals the sum of entropies only for independent variables.",
+      "Conditional entropy and mutual information cannot be negative.",
+    ],
+    questionPatterns: [
+      "Given a probability table, compute entropy, joint entropy, conditional entropy, and mutual information.",
+      "Given neural responses and stimuli, estimate entropy and information from empirical distributions.",
+      "Compare spike-count entropy with spike-pattern entropy and explain what timing adds.",
+    ],
+    studyFlow: [
+      "Build the probability table.",
+      "Check normalization and compute marginals.",
+      "Choose the entropy identity that matches the question.",
+      "Compute in bits and explain the interpretation.",
     ],
     hint: "Write the required distribution first, then choose the matching entropy or information identity.",
   },
@@ -152,13 +181,39 @@ const TOPIC_DEFINITIONS: readonly TopicDefinition[] = [
     ],
     defaultSubtype: "Spike-count statistics",
     summary: "Spike counts, firing rates, variability, and interval statistics.",
-    theory:
-      "Spike-train statistics describe response rate and variability. Choose a statistic that matches whether the question is about counts or inter-spike intervals.",
-    formulas:
-      "- $r = \\frac{N_{spikes}}{T}$\n- $FF = \\frac{Var[N]}{E[N]}$\n- $CV = \\frac{\\sigma_{ISI}}{\\mu_{ISI}}$",
+    theory: [
+      "Spike-train questions ask you to summarize event times without losing the distinction between count variability and interval variability.",
+      "",
+      "- Use firing rate when the question gives spike counts and a recording duration.",
+      "- Use Fano factor when counts vary across equal windows or repeated trials.",
+      "- Use CV when the data are inter-spike intervals.",
+      "- Compare results to the Poisson benchmark: `FF = 1`, `CV = 1`, exponential ISIs, and constant hazard.",
+      "- Refractory periods, bursting, and modulation are common reasons real neurons deviate from Poisson.",
+    ].join("\n"),
+    formulas: [
+      "- Mean firing rate: $r = N_{spikes} / T$",
+      "- Poisson expected count: $\\lambda = rT$",
+      "- Fano factor: $FF = Var[N] / E[N]$",
+      "- Coefficient of variation: $CV = \\sigma_{ISI} / \\mu_{ISI}$",
+      "- Poisson ISI density: $p(\\tau) = r e^{-r\\tau}$",
+      "- Hazard: $h(\\tau)$ is the instantaneous firing probability given no spike yet.",
+    ].join("\n"),
     traps: [
-      "Using milliseconds without converting to seconds.",
-      "Confusing count variability with interval variability.",
+      "Convert milliseconds to seconds before computing Hz.",
+      "Do not use CV on spike counts or FF on ISIs.",
+      "`CV = 1` or `FF = 1` alone does not prove a process is Poisson.",
+      "A refractory period means the process remembers the last spike.",
+    ],
+    questionPatterns: [
+      "Given spike counts across trials or windows, compute rate, variance, and Fano factor.",
+      "Given ISIs, compute mean interval, CV, and regularity relative to Poisson.",
+      "Given a spike-generation rule, reason about hazard, refractoriness, and whether the process is Poisson-like.",
+    ],
+    studyFlow: [
+      "Identify whether the random quantity is count, interval, or hazard.",
+      "Convert time units before computing rates.",
+      "Compute the requested statistic.",
+      "Compare with the Poisson benchmark and state the interpretation.",
     ],
     hint: "Decide whether the random quantity is a spike count or an inter-spike interval.",
   },
@@ -595,13 +650,18 @@ function makeTopicModules(projectId: string, topics: readonly TopicAnalysis[]): 
     topicClusterId: clusterId(topic.definition),
     theorySummaryMarkdown: topic.definition.theory,
     formulaSheetMarkdown: topic.definition.formulas,
-    commonTrapsMarkdown: topic.definition.traps.map((trap) => `- ${trap}`).join("\n"),
-    subtypeCoverageJson: Object.fromEntries(
-      unique(topic.candidates.map(({ subtype }) => subtype)).map((subtype) => [
-        subtype,
-        topic.candidates.filter((candidate) => candidate.subtype === subtype).length,
-      ]),
-    ),
+    commonTrapsMarkdown: "",
+    subtypeCoverageJson: {
+      subtypes: unique(topic.candidates.map(({ subtype }) => subtype)),
+      counts: Object.fromEntries(
+        unique(topic.candidates.map(({ subtype }) => subtype)).map((subtype) => [
+          subtype,
+          topic.candidates.filter((candidate) => candidate.subtype === subtype).length,
+        ]),
+      ),
+      questionPatterns: topic.definition.questionPatterns ?? [],
+      studyFlow: topic.definition.studyFlow ?? [],
+    },
     firstExposureComplete: false,
   }));
 }

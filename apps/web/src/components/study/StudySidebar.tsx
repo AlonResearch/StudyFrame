@@ -48,6 +48,12 @@ import { importStudyFolder } from "~/study/studyFolderImport";
 import { parseStudyImportJson } from "~/study/studyImport";
 import { getBestAttempt, getQuestionsForTopicThread } from "~/study/studyLogic";
 import { analyzeStudyProject } from "~/study/studyProjectAnalysis";
+import {
+  filesFromDrop,
+  makeOpenedSourceMaterials,
+  openedSourceRootName,
+  type OpenedSourceMaterial,
+} from "~/study/studySourceMaterials";
 import { useStudyFrameStore } from "~/study/studyStore";
 import type { StudyDataset } from "~/study/studyTypes";
 import { ensureLocalApi } from "~/localApi";
@@ -207,7 +213,8 @@ export function StudySidebar() {
                     </button>
                     <SidebarMenuButton
                       isActive={isProjectActive && selectedTopicThreadId === null}
-                      className="h-auto items-start gap-2 py-2 pl-9 transition-colors duration-150"
+                      data-testid={`course-row-${courseProject.id}`}
+                      className="h-auto items-start gap-2 py-2 pl-9 transition-colors duration-150 hover:bg-foreground/[0.06] group-hover/course-header:bg-foreground/[0.06]"
                       onClick={() => {
                         selectProject(courseProject.id);
                         setExpandedCourseIds((current) => {
@@ -256,7 +263,12 @@ export function StudySidebar() {
                         <SidebarMenuSubItem key={thread.id}>
                           <SidebarMenuSubButton
                             isActive={isActive}
-                            className="h-auto items-start py-2 transition-colors duration-150"
+                            data-testid={`topic-row-${thread.id}`}
+                            className={cn(
+                              "h-auto items-start py-2 text-muted-foreground transition-colors duration-150 hover:bg-foreground/[0.06] hover:text-foreground",
+                              isActive &&
+                                "bg-foreground/[0.06] font-medium text-foreground hover:bg-foreground/[0.08]",
+                            )}
                             onClick={() => selectTopicThread(thread.id)}
                             render={<button type="button" />}
                           >
@@ -396,6 +408,12 @@ function ProgressBar({ value }: { value: number }) {
   );
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function StudyImportDialog({
   open,
   onOpenChange,
@@ -420,12 +438,22 @@ function StudyImportDialog({
   const [folderImportSummary, setFolderImportSummary] = useState<string | null>(null);
   const [secondaryOptionsOpen, setSecondaryOptionsOpen] = useState(false);
   const [importedProjectId, setImportedProjectId] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [openedMaterials, setOpenedMaterials] = useState<readonly OpenedSourceMaterial[]>([]);
+  const [materialPreview, setMaterialPreview] = useState<{
+    readonly materialId: string;
+    readonly title: string;
+    readonly content: string;
+  } | null>(null);
+  const directoryInputRef = useRef<HTMLInputElement>(null);
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       setError(null);
       setFolderImportSummary(null);
       setImportedProjectId(null);
+      setOpenedMaterials([]);
+      setMaterialPreview(null);
     }
     onOpenChange(nextOpen);
   };
@@ -440,19 +468,33 @@ function StudyImportDialog({
     }
   };
 
+  const applyFolderImport = ({
+    snapshot,
+    result,
+  }: Awaited<ReturnType<typeof importStudyFolder>>) => {
+    onFolderImported(snapshot.dataset);
+    setImportedProjectId(result.projectId);
+    setFolderImportSummary(
+      `Imported ${result.importedDocumentCount} files and ${result.questionCandidateCount} question candidates.`,
+    );
+    setSourceRoot("");
+  };
+
+  const openFolderPath = (folderPath: string) => {
+    setSourceRoot(folderPath);
+    setImportedProjectId(null);
+    setError(null);
+    setFolderImportSummary(
+      `Opened ${folderPath}. Source extraction will run when you choose Extract sources.`,
+    );
+  };
+
   const importFolderPath = (folderPath: string) => {
     setImportingFolder(true);
     setError(null);
     setFolderImportSummary(null);
     void importStudyFolder({ projectId, sourceRoot: folderPath })
-      .then(({ snapshot, result }) => {
-        onFolderImported(snapshot.dataset);
-        setImportedProjectId(snapshot.dataset.projects[0]?.id ?? null);
-        setFolderImportSummary(
-          `Imported ${result.importedDocumentCount} files and ${result.questionCandidateCount} question candidates.`,
-        );
-        setSourceRoot("");
-      })
+      .then(applyFolderImport)
       .catch((cause) => {
         setError(cause instanceof Error ? cause.message : "Could not import this folder.");
       })
@@ -470,21 +512,99 @@ function StudyImportDialog({
 
   const handleOpenFolder = () => {
     if (importingFolder) return;
+    if (!window.desktopBridge) {
+      directoryInputRef.current?.click();
+      return;
+    }
     void ensureLocalApi()
       .dialogs.pickFolder()
       .then((folderPath) => {
         if (!folderPath) return;
-        importFolderPath(folderPath);
+        openFolderPath(folderPath);
       })
       .catch((cause) => {
         setError(cause instanceof Error ? cause.message : "Could not open the folder picker.");
       });
   };
 
-  const handleFolderImport = () => {
+  const openMaterials = (files: readonly File[]) => {
+    if (files.length === 0) return;
+    const materials = makeOpenedSourceMaterials(files);
+    const rootName = openedSourceRootName(materials);
+    setOpenedMaterials(materials);
+    setMaterialPreview(null);
+    setImportedProjectId(null);
+    setError(null);
+    setFolderImportSummary(
+      `Opened ${materials.length} ${materials.length === 1 ? "material" : "materials"} from ${rootName}. No files were uploaded.`,
+    );
+  };
+
+  const handleDirectoryChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    openMaterials(Array.from(event.target.files ?? []));
+    event.target.value = "";
+  };
+
+  const handleSourceDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    setDragActive(false);
+    void filesFromDrop(event.dataTransfer)
+      .then(openMaterials)
+      .catch((cause) => {
+        setError(cause instanceof Error ? cause.message : "Could not read the dropped sources.");
+      });
+  };
+
+  const handleFolderPathOpen = () => {
+    const trimmedSourceRoot = sourceRoot.trim();
+    if (!trimmedSourceRoot) return;
+    openFolderPath(trimmedSourceRoot);
+  };
+
+  const handleExtractSources = () => {
     const trimmedSourceRoot = sourceRoot.trim();
     if (!trimmedSourceRoot || importingFolder) return;
     importFolderPath(trimmedSourceRoot);
+  };
+
+  const handleMaterialPreview = (material: OpenedSourceMaterial) => {
+    setMaterialPreview({
+      materialId: material.id,
+      title: material.relativePath,
+      content: "Loading preview...",
+    });
+    const textual =
+      material.type.startsWith("text/") ||
+      /\.(?:csv|json|md|markdown|txt)$/iu.test(material.relativePath);
+    if (!textual) {
+      setMaterialPreview({
+        materialId: material.id,
+        title: material.relativePath,
+        content: `Preview is available on demand for text-like files. ${material.name} is ${formatBytes(material.size)}${material.type ? ` (${material.type})` : ""}.`,
+      });
+      return;
+    }
+    void material.file
+      .slice(0, 16_384)
+      .text()
+      .then((content) => {
+        setMaterialPreview({
+          materialId: material.id,
+          title: material.relativePath,
+          content:
+            material.size > 16_384
+              ? `${content}\n\n[Preview truncated at 16 KB. No upload performed.]`
+              : content,
+        });
+      })
+      .catch((cause) => {
+        setMaterialPreview({
+          materialId: material.id,
+          title: material.relativePath,
+          content: cause instanceof Error ? cause.message : "Could not read this material.",
+        });
+      });
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -507,18 +627,40 @@ function StudyImportDialog({
         <DialogHeader>
           <DialogTitle>Import course</DialogTitle>
           <DialogDescription>
-            Open a local course folder first. Extra source inputs are available when a folder picker
-            is not enough.
+            Open a course folder or review a dropped material list first. Extraction runs only when
+            you choose it.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
-          <div className="rounded-lg border border-border bg-background/65 p-4">
+          <div
+            className={cn(
+              "rounded-lg border border-border bg-background/65 p-4 transition-colors",
+              dragActive && "border-primary bg-primary/8",
+            )}
+            onDragEnter={(event) => {
+              if (!event.dataTransfer.types.includes("Files")) return;
+              event.preventDefault();
+              setDragActive(true);
+            }}
+            onDragOver={(event) => {
+              if (!event.dataTransfer.types.includes("Files")) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+              setDragActive(true);
+            }}
+            onDragLeave={(event) => {
+              const nextTarget = event.relatedTarget;
+              if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+              setDragActive(false);
+            }}
+            onDrop={handleSourceDrop}
+          >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <div className="text-sm font-medium">Course folder</div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  Select the folder that contains past exams, quizzes, lecture material, solutions,
-                  and supporting files.
+                  Select a server-visible folder path for extraction, or open/drop materials here to
+                  inspect the source list without uploading.
                 </div>
               </div>
               <Button className="shrink-0" disabled={importingFolder} onClick={handleOpenFolder}>
@@ -527,12 +669,72 @@ function StudyImportDialog({
                 ) : (
                   <FolderOpenIcon className="size-4" />
                 )}
-                {importingFolder ? "Importing" : "Open folder"}
+                {importingFolder ? "Extracting" : "Open folder"}
               </Button>
+              <input
+                ref={directoryInputRef}
+                className="sr-only"
+                type="file"
+                multiple
+                onChange={handleDirectoryChange}
+                {...{ directory: "", webkitdirectory: "" }}
+              />
+            </div>
+            <div
+              className={cn(
+                "mt-3 rounded-md border border-dashed border-border px-3 py-2 text-center text-xs text-muted-foreground",
+                dragActive && "border-primary text-foreground",
+              )}
+            >
+              {dragActive
+                ? "Drop to open the material list"
+                : "Drag and drop materials or folders to list them"}
             </div>
             {folderImportSummary ? (
               <div className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                 {folderImportSummary}
+              </div>
+            ) : null}
+            {openedMaterials.length > 0 ? (
+              <div className="mt-3 rounded-md border border-border bg-muted/20 p-2">
+                <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>
+                    {openedMaterials.length} opened{" "}
+                    {openedMaterials.length === 1 ? "material" : "materials"}
+                  </span>
+                  <span>No upload</span>
+                </div>
+                <div className="max-h-40 space-y-1 overflow-auto pr-1">
+                  {openedMaterials.slice(0, 60).map((material) => (
+                    <button
+                      key={material.id}
+                      type="button"
+                      className={cn(
+                        "flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-foreground/[0.06]",
+                        materialPreview?.materialId === material.id && "bg-foreground/[0.06]",
+                      )}
+                      onClick={() => handleMaterialPreview(material)}
+                    >
+                      <span className="min-w-0 truncate">{material.relativePath}</span>
+                      <span className="shrink-0 text-muted-foreground">
+                        {formatBytes(material.size)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {openedMaterials.length > 60 ? (
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Showing first 60 materials. The full list stays open in memory.
+                  </div>
+                ) : null}
+                {materialPreview ? (
+                  <div className="mt-2 rounded-md border border-border bg-background/80 p-2">
+                    <div className="mb-1 truncate text-xs font-medium">{materialPreview.title}</div>
+                    <pre className="max-h-36 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">
+                      {materialPreview.content}
+                    </pre>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -551,22 +753,30 @@ function StudyImportDialog({
           {secondaryOptionsOpen ? (
             <div className="mt-3 space-y-4 rounded-lg border border-border bg-muted/20 p-3">
               <div>
-                <div className="text-xs font-medium text-muted-foreground">Server folder path</div>
+                <div className="text-xs font-medium text-muted-foreground">
+                  Server-visible folder path
+                </div>
                 <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                   <Input
                     value={sourceRoot}
-                    onChange={(event) => setSourceRoot(event.target.value)}
+                    onChange={(event) => {
+                      setSourceRoot(event.target.value);
+                      setImportedProjectId(null);
+                    }}
                     placeholder="G:\My Drive\Bar-Ilan\Signal and Data Analysis\Quiz"
                   />
                   <Button
                     className="shrink-0"
                     size="sm"
-                    disabled={sourceRoot.trim().length === 0 || importingFolder}
-                    onClick={handleFolderImport}
+                    disabled={sourceRoot.trim().length === 0}
+                    onClick={handleFolderPathOpen}
                   >
-                    <FilePlus2Icon className="size-4" />
-                    {importingFolder ? "Importing" : "Use path"}
+                    <FolderOpenIcon className="size-4" />
+                    Open path
                   </Button>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  This records the path only. Extraction starts from the footer action.
                 </div>
               </div>
 
@@ -612,6 +822,20 @@ function StudyImportDialog({
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             Cancel
           </Button>
+          {!importedProjectId ? (
+            <Button
+              variant="outline"
+              disabled={sourceRoot.trim().length === 0 || importingFolder}
+              onClick={handleExtractSources}
+            >
+              {importingFolder ? (
+                <LoaderCircleIcon className="size-4 animate-spin" />
+              ) : (
+                <FilePlus2Icon className="size-4" />
+              )}
+              {importingFolder ? "Extracting" : "Extract sources"}
+            </Button>
+          ) : null}
           {secondaryOptionsOpen && rawJson.trim().length > 0 ? (
             <Button variant="outline" onClick={handleImport}>
               Import JSON

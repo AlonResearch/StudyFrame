@@ -1,21 +1,21 @@
 # StudyFrame
 
-StudyFrame is a desktop study workspace that turns a course folder into a prioritized, spaced-learning plan built around problem-based learning (PBL).
+StudyFrame is a desktop study workspace that turns a course folder or a list of course materials with questions into a prioritized, spaced-learning plan built around problem-based learning (PBL), similar to flashcards, that makes you redo questions that you mistake more regularly, and generates similar questions when the real ones run out.
 
-Students select a local repository containing past exams, quizzes, lecture material, solutions, and supporting files. StudyFrame organizes the material into topics, gives a brief explanation of the core concepts, and guides the student through real past questions before offering generated practice.
+Students open a local course folder containing past exams, quizzes, lecture material, solutions, and supporting files. StudyFrame can also hold a local material list for inspection before extraction. It organizes extracted material into topics, gives a brief explanation of the core concepts, and guides the student through real past questions before offering generated practice.
 
 This README is the product contract for builders. StudyFrame is under active development.
 
 ## Core Workflow
 
 ```text
-Choose course folder
+Open course folder or review source materials
  -> extract questions and source context
  -> review warnings for unclear files or missing context
  -> analyze topics, subtopics, and exam frequency
  -> inspect the recommended study order
  -> choose a topic
- -> read a concise core-concept summary and formulas
+ -> read a brief explanation with definitions and formulas
  -> solve real past questions
  -> receive hints or feedback when needed
  -> review mistakes and revisit due or weak topics
@@ -28,10 +28,10 @@ Choose course folder
 - A project represents one course, subject, or exam repository.
 - Topics are initially prioritized using recent exam frequency, recurrence, and point weight.
 - After practice begins, the topic queue should adapt like a spaced-repetition flashcard system: important, weak, and due topics return more often while mastered topics return less often.
-- Each topic includes a brief explanation, formulas, recurring question types, real questions, hints, solutions, traps, and progress.
+- Each topic includes a brief explanation, definitions and formulas, recurring question types, real questions, hints, solutions, question-specific watch-outs, and progress.
 - Real extracted questions always come before generated variants.
 - Generated questions unlock only after the real questions in the selected scope are attempted. They must be labeled and scored separately.
-- Before submit or reveal, never expose expected answers, rubric keywords, solution steps, or answer-revealing traps.
+- Before submit or reveal, never expose expected answers, rubric keywords, solution steps, or answer-revealing watch-outs.
 - Hints and direction checks should help without giving away the final answer.
 - Every real question should retain its source document, year when available, anchor, linked assets, extraction confidence, and warnings.
 - If an image, table, equation, or layout is required but unclear, show a warning instead of pretending the question is complete.
@@ -45,19 +45,33 @@ StudyFrame combines:
 
 - **Spaced learning:** topics return at useful intervals based on priority, performance, and time since review.
 - **Problem-based learning:** the student learns by solving representative real problems.
-- **Brief concept refreshers:** each topic begins with the minimum theory and formulas needed to start solving.
+- **Brief concept refreshers:** each topic begins with the minimum theory, definitions, and formulas needed to start solving.
 
-Opening a topic should immediately show the focused problem-solving workspace. A contextual
-extra-information drawer, opened from the page menu only when needed, should provide:
+Opening a topic should immediately show a concise manual-study review above the focused
+problem-solving workspace. This review is not a loose summary. It is the app-native version of the
+golden markdown study artifact, with stable optional sections that extraction and provider agents
+fill from the source material. The UI should render only the sections that have useful content, so
+topics without formulas remain clean. The review stays visible while the student switches
+between the topic's questions and can provide:
 
-1. A short theory summary.
-2. Relevant formulas or reminders.
-3. Subtopics and progress.
-4. A queue of real past questions.
+1. **Brief explanation:** quick theory that explains what the topic is about and what the main quantities mean.
+2. **Definitions:** named quantities, formula forms (if any), units, and interpretation rules.
+3. Recurring question types seen in real quizzes.
+4. A solve flow for approaching the topic's flashcards.
 
-The main workspace should provide a focused answer area with hint, direction-check, submit, reveal,
-and next actions. Source context belongs in the same extra-information drawer so it stays available
-without disturbing the solving flow.
+Question-specific watch-outs are answer-derived support. They should appear only after the student
+submits or reveals the real answer, and should be shown as the relevant "watch for this question"
+list.
+
+A contextual extra-information drawer, opened from the topic card menu only when needed, should
+provide subtopics, progress, a queue of real past questions, and spoiler-safe question details.
+Question details should include source context, extraction confidence, warnings, classification,
+and linked assets before exposing answer-derived support after submit or reveal along with the confidence score of the right answer.
+
+The main workspace should provide a focused answer area with submit, next, and one progressive help
+action: direction check, then hint, then show answer. Showing the answer replaces the input area.
+Source context belongs in the same extra-information drawer so it stays available without disturbing
+the solving flow.
 
 After the real questions are exhausted, offer:
 
@@ -102,6 +116,7 @@ The primary golden example used while building StudyFrame is:
 
 ```text
 G:\My Drive\Bar-Ilan\Signal and Data Analysis\Quiz
+The Topic_X_nameOFtheTOPIC.MD is an example of study workflow generated from the sources manually (AN OUTPUT) to be used as a golden rule of a good output, not source material!
 ```
 
 This is an external course dataset, not the StudyFrame application repository. It contains raw quizzes, lecture material, supporting files, generated exports, and prior extraction artifacts. StudyFrame must distinguish those roles correctly and avoid contaminating analysis with generated files.

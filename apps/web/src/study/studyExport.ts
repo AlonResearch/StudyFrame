@@ -114,7 +114,6 @@ export function exportTopicThread(input: {
     appendGroupedQuestions(lines, input.dataset, input.attempts, generated);
   }
 
-  appendModuleTraps(lines, module);
   return lines.join("\n");
 }
 
@@ -143,7 +142,6 @@ export function exportReviewMaterial(input: {
   if (module?.formulaSheetMarkdown.trim()) {
     lines.push("## Formula Reminders", "", module.formulaSheetMarkdown, "");
   }
-  appendModuleTraps(lines, module);
   lines.push(
     "## Questions To Review",
     "",
@@ -317,11 +315,11 @@ export function exportMistakesReview(input: {
       "",
       ...(support?.solutionSteps ?? []).map((step, index) => `${index + 1}. ${step}`),
       "",
-      "### Common Traps",
+      "### Watch For This Question",
       "",
       ...(support?.commonMistakes.length
         ? support.commonMistakes.map((mistake) => `- ${mistake}`)
-        : ["- No generated traps are available."]),
+        : ["- No generated watch-outs are available."]),
       "",
     );
   }
@@ -357,7 +355,7 @@ function appendGroupedQuestions(
       if (support && (support.solutionSteps.length > 0 || support.commonMistakes.length > 0)) {
         lines.push(
           "<details>",
-          "<summary>Solution and traps</summary>",
+          "<summary>Solution and watch-outs</summary>",
           "",
           "##### Step-by-Step Solution",
           "",
@@ -365,11 +363,11 @@ function appendGroupedQuestions(
             ? support.solutionSteps.map((step, index) => `${index + 1}. ${step}`)
             : ["No generated solution is available."]),
           "",
-          "##### Common Traps",
+          "##### Watch For This Question",
           "",
           ...(support.commonMistakes.length > 0
             ? support.commonMistakes.map((mistake) => `- ${mistake}`)
-            : ["- No generated traps are available."]),
+            : ["- No generated watch-outs are available."]),
           "",
           "</details>",
           "",
@@ -377,11 +375,6 @@ function appendGroupedQuestions(
       }
     }
   }
-}
-
-function appendModuleTraps(lines: string[], module: StudyTopicModule | null) {
-  if (!module?.commonTrapsMarkdown.trim()) return;
-  lines.push("## Common Traps", "", module.commonTrapsMarkdown, "");
 }
 
 function groupQuestionsBySubtype(

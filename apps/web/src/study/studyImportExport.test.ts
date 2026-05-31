@@ -137,7 +137,7 @@ describe("study import/export", () => {
     });
 
     expect(topic).toContain("## Brief Explanation");
-    expect(topic).toContain("<summary>Solution and traps</summary>");
+    expect(topic).toContain("<summary>Solution and watch-outs</summary>");
     expect(review).toContain("# Spike-train statistics Review Material");
     expect(review).toContain("## Questions To Review");
     expect(mistakes).toContain("# Mistakes Review");
