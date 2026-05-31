@@ -1,6 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
-import * as NodePath from "node:path";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -137,11 +136,12 @@ describe("DesktopAppIdentity", () => {
     withIdentity(
       Effect.gen(function* () {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
+        const environment = yield* DesktopEnvironment.DesktopEnvironment;
         const userDataPath = yield* identity.resolveUserDataPath;
 
         assert.equal(
           userDataPath,
-          NodePath.join("/Users/alice/Library/Application Support", "studyframe"),
+          environment.path.join("/Users/alice/Library/Application Support", "studyframe"),
         );
       }),
       { legacyPathExists: true },

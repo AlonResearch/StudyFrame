@@ -1,4 +1,5 @@
 import NodeOS from "node:os";
+// @effect-diagnostics nodeBuiltinImport:off - Bootstrap config tests need an inherited OS file descriptor.
 import * as NFS from "node:fs";
 
 import { assert, expect, it } from "@effect/vitest";
@@ -27,7 +28,7 @@ const makeDesktopBootstrap = (
   mode: "desktop",
   noBrowser: true,
   port: 4888,
-  t3Home: "/tmp/t3-bootstrap-home",
+  t3Home: "/tmp/studyframe-bootstrap-home",
   host: "127.0.0.1",
   desktopBootstrapToken: "desktop-bootstrap-token",
   tailscaleServeEnabled: false,
@@ -45,12 +46,15 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
     otlpTracesUrl: undefined,
     otlpMetricsUrl: undefined,
     otlpExportIntervalMs: 10_000,
-    otlpServiceName: "t3-server",
+    otlpServiceName: "studyframe-server",
   } as const;
 
   const openBootstrapFd = Effect.fn(function* (payload: DesktopBackendBootstrapValue) {
     const fs = yield* FileSystem.FileSystem;
-    const filePath = yield* fs.makeTempFileScoped({ prefix: "t3-bootstrap-", suffix: ".ndjson" });
+    const filePath = yield* fs.makeTempFileScoped({
+      prefix: "studyframe-bootstrap-",
+      suffix: ".ndjson",
+    });
     const encoded = yield* encodeDesktopBootstrap(payload);
     yield* fs.writeFileString(filePath, `${encoded}\n`);
     return NFS.openSync(filePath, "r");
@@ -83,15 +87,15 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_LOG_LEVEL: "Warn",
-                  T3CODE_MODE: "desktop",
-                  T3CODE_PORT: "4001",
-                  T3CODE_HOST: "0.0.0.0",
-                  T3CODE_HOME: baseDir,
+                  STUDYFRAME_LOG_LEVEL: "Warn",
+                  STUDYFRAME_MODE: "desktop",
+                  STUDYFRAME_PORT: "4001",
+                  STUDYFRAME_HOST: "0.0.0.0",
+                  STUDYFRAME_HOME: baseDir,
                   VITE_DEV_SERVER_URL: "http://127.0.0.1:5173",
-                  T3CODE_NO_BROWSER: "true",
-                  T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "false",
-                  T3CODE_LOG_WS_EVENTS: "true",
+                  STUDYFRAME_NO_BROWSER: "true",
+                  STUDYFRAME_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "false",
+                  STUDYFRAME_LOG_WS_EVENTS: "true",
                 },
               }),
             ),
@@ -149,15 +153,15 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_LOG_LEVEL: "Warn",
-                  T3CODE_MODE: "desktop",
-                  T3CODE_PORT: "4001",
-                  T3CODE_HOST: "0.0.0.0",
-                  T3CODE_HOME: join(NodeOS.tmpdir(), "ignored-base"),
+                  STUDYFRAME_LOG_LEVEL: "Warn",
+                  STUDYFRAME_MODE: "desktop",
+                  STUDYFRAME_PORT: "4001",
+                  STUDYFRAME_HOST: "0.0.0.0",
+                  STUDYFRAME_HOME: join(NodeOS.tmpdir(), "ignored-base"),
                   VITE_DEV_SERVER_URL: "http://127.0.0.1:5173",
-                  T3CODE_NO_BROWSER: "false",
-                  T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "false",
-                  T3CODE_LOG_WS_EVENTS: "false",
+                  STUDYFRAME_NO_BROWSER: "false",
+                  STUDYFRAME_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "false",
+                  STUDYFRAME_LOG_WS_EVENTS: "false",
                 },
               }),
             ),
@@ -223,10 +227,10 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_BOOTSTRAP_FD: String(fd),
-                  T3CODE_NO_BROWSER: "true",
-                  T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
-                  T3CODE_LOG_WS_EVENTS: "true",
+                  STUDYFRAME_BOOTSTRAP_FD: String(fd),
+                  STUDYFRAME_NO_BROWSER: "true",
+                  STUDYFRAME_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
+                  STUDYFRAME_LOG_WS_EVENTS: "true",
                 },
               }),
             ),
@@ -260,7 +264,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
   it.effect("uses bootstrap envelope values as fallbacks when flags and env are absent", () =>
     Effect.gen(function* () {
       const { join, resolve } = yield* Path.Path;
-      const baseDir = resolve("/tmp/t3-bootstrap-home");
+      const baseDir = resolve("/tmp/studyframe-bootstrap-home");
       const fd = yield* openBootstrapFd(
         makeDesktopBootstrap({
           port: 4888,
@@ -298,7 +302,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_BOOTSTRAP_FD: String(fd),
+                  STUDYFRAME_BOOTSTRAP_FD: String(fd),
                 },
               }),
             ),
@@ -389,7 +393,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
         makeDesktopBootstrap({
           port: 4888,
           host: "127.0.0.2",
-          t3Home: "/tmp/t3-bootstrap-home",
+          t3Home: "/tmp/studyframe-bootstrap-home",
           noBrowser: false,
           desktopBootstrapToken: "desktop-token",
           tailscaleServeEnabled: false,
@@ -420,12 +424,12 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_MODE: "web",
-                  T3CODE_BOOTSTRAP_FD: String(fd),
-                  T3CODE_HOME: baseDir,
-                  T3CODE_NO_BROWSER: "true",
-                  T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
-                  T3CODE_LOG_WS_EVENTS: "true",
+                  STUDYFRAME_MODE: "web",
+                  STUDYFRAME_BOOTSTRAP_FD: String(fd),
+                  STUDYFRAME_HOME: baseDir,
+                  STUDYFRAME_NO_BROWSER: "true",
+                  STUDYFRAME_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
+                  STUDYFRAME_LOG_WS_EVENTS: "true",
                 },
               }),
             ),
@@ -556,8 +560,8 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_NO_BROWSER: "false",
-                  T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
+                  STUDYFRAME_NO_BROWSER: "false",
+                  STUDYFRAME_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
                 },
               }),
             ),

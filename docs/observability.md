@@ -12,7 +12,7 @@ StudyFrame inherits the server observability foundation from T3 Code.
 Default trace path:
 
 ```text
-~/.t3/userdata/logs/server.trace.ndjson
+~/.studyframe/userdata/logs/server.trace.ndjson
 ```
 
 Relevant code:

@@ -47,7 +47,7 @@ class DesktopDevelopmentBackendPortRequiredError extends Data.TaggedError(
   "DesktopDevelopmentBackendPortRequiredError",
 )<{}> {
   override get message() {
-    return "T3CODE_PORT is required in desktop development.";
+    return "STUDYFRAME_PORT is required in desktop development.";
   }
 }
 
