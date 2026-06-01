@@ -128,12 +128,14 @@ course details or markdown reports in the shared right-side overlay sheet. Topic
 mirror the app-native golden-study-guide shape with priority, subtopics, brief explanation,
 definitions/formulas, high-yield skills, recurring question types, problems, step-by-step solutions
 when included, and common traps. Topic practice is one
-reading sheet: a compact topic header, brief explanation, workflow progress, and the active question
-remain in one surface while questions switch in place. The topic review renders the StudyFrame topic
-module as a manual-study equivalent with optional agent-fillable sections: brief explanation,
-definitions and formulas, high-yield skills, recurring question types, representative unsolved
-quiz-style drills, solve flow, and generic topic traps. Empty optional sections are skipped so
-topics without formulas do not show placeholder UI. Question-specific common mistakes are treated
+reading sheet: a compact topic header, short brief explanation, workflow progress, and the active
+question remain in one surface while questions switch in place. The visible topic review consumes the
+StudyFrame topic module as a compact concept refresher: brief explanation plus core quantities or
+formulas when useful. Structured slots for subtopics, high-yield skills, recurring question types,
+representative unsolved quiz-style drills, solve flow, and generic topic traps remain available to
+exports and secondary review material, but they are not all rendered above every question. Empty
+optional sections are skipped so topics without formulas do not show placeholder UI.
+Question-specific common mistakes are treated
 as answer-derived support and render only after submit or reveal as the relevant
 `Watch for this question` list. The topic card header exposes its own
 three-dots `Question details` menu for the real-question queue or spoiler-safe question details.
@@ -295,9 +297,12 @@ from being derived from only the first question batch for that topic while avoid
 call per topic.
 
 Topic modules target the same study value as the golden markdown examples while remaining
-app-native and spoiler-safe before practice: brief explanation, definitions/formulas, subtopics,
-high-yield skills, recurring question patterns, representative unsolved quiz-style drills, solve
-flow, and generic common traps. Final numeric answers, rubrics, worked solutions, and
+app-native and spoiler-safe before practice. The provider prompt now treats topic generation as
+compact slot filling rather than article writing: `theorySummaryMarkdown` should resemble only the
+golden `## Brief Explanation` body, with short prose, limited bullets, and no duplicate heading;
+`formulaSheetMarkdown` should contain only a small set of essential formulas, units, or log values;
+and optional arrays such as subtopics, high-yield skills, question patterns, drills, and solve flow
+should stay short and evidence-backed. Final numeric answers, rubrics, worked solutions, and
 question-specific watch-outs stay in question support and render only after submit or reveal.
 The provider question-support prompt also asks for `cleanedPromptMarkdown` as a structured,
 learner-facing problem statement: preserve required numbers, units, file names, and data references;

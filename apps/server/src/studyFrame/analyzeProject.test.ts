@@ -220,7 +220,7 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
       );
       assert.equal(
         analyzed.snapshot.dataset.topicModules?.[0]?.generationMetadataJson?.promptVersion,
-        "studyframe-analysis-v3",
+        "studyframe-analysis-v4",
       );
       assert.include(
         analyzed.snapshot.dataset.projects[0]?.extractionWarnings ?? [],
@@ -288,7 +288,7 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
                       })) ?? [],
                   });
                 }
-                if (input.prompt.includes("app-native topic study guides")) {
+                if (input.prompt.includes("compact app-native topic slots")) {
                   topicGuideQuestionCounts.push(
                     payload.topicRequests?.[0]?.realQuestions.length ?? 0,
                   );

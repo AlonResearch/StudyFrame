@@ -1079,99 +1079,23 @@ function TopicTheoryReview({ topicModule }: { readonly topicModule: StudyTopicMo
         <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
           Step 1
         </div>
-        <h2 className="mt-1 text-base font-semibold">Study guide</h2>
+        <h2 className="mt-1 text-base font-semibold">Brief Explanation</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Brief explanation, formulas, problems, and traps before the current question.
+          The minimum theory and formulas needed before the current question.
         </p>
       </div>
       {hasBriefExplanation ? (
-        <section>
-          <h3 className="text-xs font-medium text-muted-foreground">Brief Explanation</h3>
+        <section aria-label="Topic brief explanation">
           <StudyMarkdown className="mt-2" content={review.briefExplanationMarkdown} />
         </section>
       ) : null}
       {review.definitionsAndFormulasMarkdown.trim().length > 0 ? (
-        <section>
+        <section className="rounded-lg border border-border bg-background/55 px-3 py-3">
           <h3 className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <SigmaIcon className="size-3.5" />
-            Definitions and formulas
+            Core quantities
           </h3>
           <StudyMarkdown className="mt-2" content={review.definitionsAndFormulasMarkdown} />
-        </section>
-      ) : null}
-      {review.recurringQuestionTypes.length > 0 ? (
-        <section>
-          <h3 className="text-xs font-medium text-muted-foreground">Subtopics</h3>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {review.recurringQuestionTypes.map((subtype) => (
-              <Badge key={subtype} size="sm" variant="outline">
-                {subtype}
-              </Badge>
-            ))}
-          </div>
-        </section>
-      ) : null}
-      {review.highYieldSkills.length > 0 ? (
-        <section>
-          <h3 className="text-xs font-medium text-muted-foreground">High-yield skills</h3>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed">
-            {review.highYieldSkills.map((skill) => (
-              <li key={skill}>{skill}</li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-      {review.questionPatterns.length > 0 ? (
-        <section>
-          <h3 className="text-xs font-medium text-muted-foreground">Recurring question types</h3>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed">
-            {review.questionPatterns.map((pattern) => (
-              <li key={pattern}>{pattern}</li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-      {review.practiceDrills.length > 0 ? (
-        <section>
-          <h3 className="text-xs font-medium text-muted-foreground">Problems</h3>
-          <div className="mt-2 space-y-2">
-            {review.practiceDrills.map((drill) => (
-              <article
-                className="rounded-lg border border-border bg-background/60 px-3 py-3"
-                key={`${drill.title}-${drill.sourceAnchors.join(",")}`}
-              >
-                <div className="text-sm font-semibold">{drill.title}</div>
-                {drill.sourceAnchors.length > 0 ? (
-                  <div className="mt-1 text-[11px] text-muted-foreground">
-                    Based on {drill.sourceAnchors.join(", ")}
-                  </div>
-                ) : null}
-                <StudyMarkdown className="mt-2" content={drill.promptMarkdown} />
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
-      {review.solveFlow.length > 0 ? (
-        <section>
-          <h3 className="text-xs font-medium text-muted-foreground">Solve flow</h3>
-          <ol className="mt-2 grid gap-2 sm:grid-cols-2">
-            {review.solveFlow.map((step, index) => (
-              <li
-                className="rounded-md border border-border bg-background/60 px-3 py-2 text-xs leading-relaxed"
-                key={step}
-              >
-                <span className="mr-1 font-semibold text-foreground">{index + 1}.</span>
-                {step}
-              </li>
-            ))}
-          </ol>
-        </section>
-      ) : null}
-      {review.commonTrapsMarkdown.trim().length > 0 ? (
-        <section>
-          <h3 className="text-xs font-medium text-muted-foreground">Common traps</h3>
-          <StudyMarkdown className="mt-2" content={review.commonTrapsMarkdown} />
         </section>
       ) : null}
     </section>
@@ -1189,17 +1113,6 @@ function getTopicReviewSections(topicModule: StudyTopicModule) {
       "formula reminders",
       "formulas",
     ]),
-    recurringQuestionTypes: getTopicModuleSubtypes(topicModule.subtypeCoverageJson),
-    highYieldSkills: getTopicModuleStringArray(topicModule.subtypeCoverageJson, "highYieldSkills"),
-    questionPatterns: getTopicModuleStringArray(
-      topicModule.subtypeCoverageJson,
-      "questionPatterns",
-    ),
-    practiceDrills: getTopicModulePracticeDrills(topicModule.subtypeCoverageJson),
-    solveFlow: getTopicModuleStringArray(topicModule.subtypeCoverageJson, "studyFlow"),
-    commonTrapsMarkdown: stripLeadingMarkdownHeading(topicModule.commonTrapsMarkdown, [
-      "common traps",
-    ]),
   };
 }
 
@@ -1209,62 +1122,6 @@ function stripLeadingMarkdownHeading(markdown: string, headings: readonly string
   );
   const pattern = new RegExp(`^\\s*#{1,6}\\s*(?:${escapedHeadings.join("|")})\\s*\\n+`, "i");
   return markdown.replace(pattern, "").trim();
-}
-
-function getTopicModuleSubtypes(subtypeCoverageJson: unknown): string[] {
-  if (
-    typeof subtypeCoverageJson !== "object" ||
-    subtypeCoverageJson === null ||
-    !("subtypes" in subtypeCoverageJson)
-  ) {
-    return [];
-  }
-  const subtypes = (subtypeCoverageJson as { readonly subtypes?: unknown }).subtypes;
-  if (Array.isArray(subtypes)) {
-    return subtypes.filter((subtype): subtype is string => typeof subtype === "string");
-  }
-  const ignoredKeys = new Set([
-    "subtypes",
-    "counts",
-    "highYieldSkills",
-    "questionPatterns",
-    "practiceDrills",
-    "studyFlow",
-  ]);
-  return Object.keys(subtypeCoverageJson).filter((key) => !ignoredKeys.has(key));
-}
-
-function getTopicModuleStringArray(subtypeCoverageJson: unknown, key: string): string[] {
-  if (typeof subtypeCoverageJson !== "object" || subtypeCoverageJson === null) return [];
-  const value = (subtypeCoverageJson as Record<string, unknown>)[key];
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
-}
-
-interface TopicPracticeDrill {
-  readonly title: string;
-  readonly sourceAnchors: readonly string[];
-  readonly promptMarkdown: string;
-}
-
-function getTopicModulePracticeDrills(subtypeCoverageJson: unknown): TopicPracticeDrill[] {
-  if (typeof subtypeCoverageJson !== "object" || subtypeCoverageJson === null) return [];
-  const value = (subtypeCoverageJson as Record<string, unknown>).practiceDrills;
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((item): TopicPracticeDrill[] => {
-    if (typeof item !== "object" || item === null) return [];
-    const record = item as Record<string, unknown>;
-    const title = typeof record.title === "string" ? record.title.trim() : "";
-    const promptMarkdown =
-      typeof record.promptMarkdown === "string" ? record.promptMarkdown.trim() : "";
-    const sourceAnchors = Array.isArray(record.sourceAnchors)
-      ? record.sourceAnchors.filter(
-          (sourceAnchor): sourceAnchor is string =>
-            typeof sourceAnchor === "string" && sourceAnchor.trim().length > 0,
-        )
-      : [];
-    return title && promptMarkdown ? [{ title, sourceAnchors, promptMarkdown }] : [];
-  });
 }
 
 function TopicQueuePanel({
