@@ -70,6 +70,7 @@ import type {
   StudyQuestionCandidate,
   StudySourceAsset,
   StudySourceDocument,
+  StudySourceSecurityFinding,
   StudyTopicCluster,
   StudyTopicModule,
 } from "~/study/studyTypes";
@@ -152,6 +153,15 @@ export function StudyWorkspace() {
     (dataset.sourceDocuments ?? []).find(
       (document) => document.id === activeQuestion?.documentId,
     ) ?? null;
+  const activeSourceSecurityFindings =
+    activeQuestion === null
+      ? []
+      : (dataset.sourceSecurityFindings ?? []).filter(
+          (finding) =>
+            finding.documentId === activeQuestion.documentId &&
+            (finding.questionCandidateId === null ||
+              finding.questionCandidateId === activeCandidate?.id),
+        );
   const topicQuestions = topicThread ? getQuestionsForTopicThread(dataset, topicThread.id) : [];
   const realQuestions = topicQuestions.filter((question) => question.isRealQuestion);
   const generatedQuestions = topicQuestions.filter((question) => !question.isRealQuestion);
@@ -272,7 +282,6 @@ export function StudyWorkspace() {
               <TopicWorkspace
                 activeQuestion={activeQuestion}
                 activePracticeItem={activePracticeItem}
-                activeSupport={activeSupport}
                 activeTopic={activeTopic}
                 answerDraft={answerDraft}
                 attempts={attempts}
@@ -355,6 +364,7 @@ export function StudyWorkspace() {
               question={activeQuestion}
               realQuestionsRemaining={unattemptedRealQuestions.length}
               sourceAssets={activeSourceAssets}
+              sourceSecurityFindings={activeSourceSecurityFindings}
               subtypeGroups={subtypeGroups}
               topic={activeTopic}
               supportSummary={sourceContextSupport.supportSummary}
@@ -854,7 +864,6 @@ function priorityLabelText(label: StudyTopicCluster["priorityLabel"]): string {
 function TopicWorkspace({
   activeQuestion,
   activePracticeItem,
-  activeSupport,
   activeTopic,
   answerRevealed,
   answerDraft,
@@ -892,7 +901,6 @@ function TopicWorkspace({
     readonly answerInputType: StudyAnswerInputType;
     readonly sourceMetadataJson: unknown;
   } | null;
-  readonly activeSupport: ReturnType<typeof getQuestionSupport>;
   readonly activeTopic: ReturnType<typeof getQuestionTopic>;
   readonly answerRevealed: boolean;
   readonly answerDraft: string;
@@ -994,6 +1002,7 @@ function TopicExtraInfoSection({
   question,
   realQuestionsRemaining,
   sourceAssets,
+  sourceSecurityFindings,
   subtypeGroups,
   topic,
   supportSummary,
@@ -1013,6 +1022,7 @@ function TopicExtraInfoSection({
   readonly question: StudyQuestion | null;
   readonly realQuestionsRemaining: number;
   readonly sourceAssets: readonly StudySourceAsset[];
+  readonly sourceSecurityFindings: readonly StudySourceSecurityFinding[];
   readonly subtypeGroups: readonly StudySubtypeGroup[];
   readonly topic: ReturnType<typeof getQuestionTopic>;
   readonly supportSummary: string | null;
@@ -1032,6 +1042,7 @@ function TopicExtraInfoSection({
         supportConfidence={supportConfidence}
         expectedAnswer={expectedAnswer}
         sourceAssets={sourceAssets}
+        sourceSecurityFindings={sourceSecurityFindings}
       />
     );
   }
@@ -1135,7 +1146,10 @@ function getTopicReviewSections(topicModule: StudyTopicModule) {
     briefExplanationMarkdown: topicModule.theorySummaryMarkdown,
     definitionsAndFormulasMarkdown: topicModule.formulaSheetMarkdown,
     recurringQuestionTypes: getTopicModuleSubtypes(topicModule.subtypeCoverageJson),
-    questionPatterns: getTopicModuleStringArray(topicModule.subtypeCoverageJson, "questionPatterns"),
+    questionPatterns: getTopicModuleStringArray(
+      topicModule.subtypeCoverageJson,
+      "questionPatterns",
+    ),
     solveFlow: getTopicModuleStringArray(topicModule.subtypeCoverageJson, "studyFlow"),
   };
 }
@@ -1443,10 +1457,7 @@ function QuestionPracticePanel({
         ) : null}
 
         {solutionVisible ? (
-          <AnswerReviewBlock
-            solutionSteps={solutionSteps}
-            commonMistakes={commonMistakes}
-          />
+          <AnswerReviewBlock solutionSteps={solutionSteps} commonMistakes={commonMistakes} />
         ) : null}
 
         <AttemptHistory attempts={attempts} />
@@ -1578,9 +1589,7 @@ function AnswerReviewBlock({
         {hasQuestionWarnings ? (
           <aside className="space-y-3">
             <section className="rounded-md border border-border bg-muted/30 px-3 py-3">
-              <h3 className="text-xs font-medium text-muted-foreground">
-                Watch for this question
-              </h3>
+              <h3 className="text-xs font-medium text-muted-foreground">Watch for this question</h3>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-muted-foreground">
                 {commonMistakes.map((mistake) => (
                   <li key={mistake}>
@@ -1642,6 +1651,7 @@ function SourceContextPanel({
   supportConfidence,
   expectedAnswer,
   sourceAssets,
+  sourceSecurityFindings,
 }: {
   readonly question: StudyQuestion | null;
   readonly candidate: StudyQuestionCandidate | null;
@@ -1652,8 +1662,10 @@ function SourceContextPanel({
   readonly supportConfidence: number | null;
   readonly expectedAnswer: readonly string[];
   readonly sourceAssets: readonly StudySourceAsset[];
+  readonly sourceSecurityFindings: readonly StudySourceSecurityFinding[];
 }) {
   const extractionWarnings = sourceDocument?.warnings ?? [];
+  const securityStatus = sourceSecurityStatus(sourceSecurityFindings);
   const extractionStatus =
     candidate?.needsManualReview || question?.dependsOnAssets || extractionWarnings.length > 0
       ? "Needs review"
@@ -1706,6 +1718,18 @@ function SourceContextPanel({
                 : "No linked assets required"
             }
           />
+          <div>
+            <div className="text-xs font-medium text-muted-foreground">Security</div>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <Badge variant={securityStatus.variant}>{securityStatus.label}</Badge>
+              {sourceSecurityFindings.length > 0 ? (
+                <span className="text-xs text-muted-foreground">
+                  {sourceSecurityFindings.length} quarantined finding
+                  {sourceSecurityFindings.length === 1 ? "" : "s"}
+                </span>
+              ) : null}
+            </div>
+          </div>
           {supportConfidence !== null ? (
             <ContextRow
               label="Study support"
@@ -1733,6 +1757,9 @@ function SourceContextPanel({
             </div>
           ) : null}
           {sourceAssets.length > 0 ? <SourceAssetList assets={sourceAssets} /> : null}
+          {sourceSecurityFindings.length > 0 ? (
+            <SourceSecurityFindingList findings={sourceSecurityFindings} />
+          ) : null}
         </>
       ) : (
         <div className="text-muted-foreground">Select a topic question.</div>
@@ -1750,6 +1777,49 @@ function SourceContextPanel({
       ) : null}
     </div>
   );
+}
+
+function SourceSecurityFindingList({
+  findings,
+}: {
+  readonly findings: readonly StudySourceSecurityFinding[];
+}) {
+  return (
+    <div className="rounded-lg border border-warning/20 bg-warning/8 px-3 py-2 text-xs text-warning-foreground">
+      <div className="font-medium">Source security findings</div>
+      <div className="mt-2 space-y-2">
+        {findings.map((finding) => (
+          <div
+            key={finding.id}
+            className="rounded-md border border-warning/20 bg-background/50 p-2"
+          >
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="warning">{finding.severity}</Badge>
+              <Badge variant="outline">{finding.action.replace("_", " ")}</Badge>
+              <span className="break-all text-muted-foreground">{finding.sourceAnchor}</span>
+            </div>
+            <div className="mt-1 text-foreground">{finding.normalizedIntent}</div>
+            {finding.instructionText ? (
+              <pre className="mt-1 max-h-20 overflow-auto whitespace-pre-wrap break-words rounded border border-border bg-muted/30 p-2 font-mono text-[11px] text-muted-foreground">
+                {finding.instructionText}
+              </pre>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function sourceSecurityStatus(findings: readonly StudySourceSecurityFinding[]): {
+  readonly label: string;
+  readonly variant: "success" | "warning" | "destructive";
+} {
+  if (findings.length === 0) return { label: "Clean", variant: "success" };
+  if (findings.some((finding) => finding.severity === "critical" || finding.action === "blocked")) {
+    return { label: "High risk", variant: "destructive" };
+  }
+  return { label: "Review", variant: "warning" };
 }
 
 function SourceAssetList({ assets }: { readonly assets: readonly StudySourceAsset[] }) {

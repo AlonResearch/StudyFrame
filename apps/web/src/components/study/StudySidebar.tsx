@@ -44,7 +44,15 @@ import {
 } from "~/components/ui/sidebar";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
-import { importStudyFolder } from "~/study/studyFolderImport";
+import {
+  cancelStudyProcessingJob,
+  getStudyProcessingEvents,
+  getStudyProcessingJob,
+  loadStudyFrameSnapshot,
+  retryStudyProcessingJob,
+  stageStudySourceMaterials,
+  startStudyCourseProcessing,
+} from "~/study/studyCourseProcessing";
 import { parseStudyImportJson } from "~/study/studyImport";
 import { getBestAttempt, getQuestionsForTopicThread } from "~/study/studyLogic";
 import { analyzeStudyProject } from "~/study/studyProjectAnalysis";
@@ -55,7 +63,7 @@ import {
   type OpenedSourceMaterial,
 } from "~/study/studySourceMaterials";
 import { useStudyFrameStore } from "~/study/studyStore";
-import type { StudyDataset } from "~/study/studyTypes";
+import type { StudyDataset, StudyProcessingEvent, StudyProcessingJob } from "~/study/studyTypes";
 import { ensureLocalApi } from "~/localApi";
 import { cn } from "~/lib/utils";
 
@@ -363,8 +371,6 @@ export function StudySidebar() {
         onFolderImported={(dataset) => {
           replaceDataset(dataset);
         }}
-        analyzingProject={analyzingProject}
-        onCheckPriorities={handleAnalyzeProject}
         onImport={(rawJson) => {
           replaceDataset(parseStudyImportJson(rawJson, new Date().toISOString()));
           setImportOpen(false);
@@ -419,23 +425,22 @@ function StudyImportDialog({
   onOpenChange,
   projectId,
   onFolderImported,
-  analyzingProject,
-  onCheckPriorities,
   onImport,
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly projectId: string | null;
   readonly onFolderImported: (dataset: StudyDataset) => void;
-  readonly analyzingProject: boolean;
-  readonly onCheckPriorities: (projectId: string) => Promise<void>;
   readonly onImport: (rawJson: string) => void;
 }) {
   const [rawJson, setRawJson] = useState("");
   const [sourceRoot, setSourceRoot] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [importingFolder, setImportingFolder] = useState(false);
+  const [stagingMaterials, setStagingMaterials] = useState(false);
   const [folderImportSummary, setFolderImportSummary] = useState<string | null>(null);
+  const [processingJob, setProcessingJob] = useState<StudyProcessingJob | null>(null);
+  const [processingEvents, setProcessingEvents] = useState<readonly StudyProcessingEvent[]>([]);
   const [secondaryOptionsOpen, setSecondaryOptionsOpen] = useState(false);
   const [importedProjectId, setImportedProjectId] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -446,12 +451,18 @@ function StudyImportDialog({
     readonly content: string;
   } | null>(null);
   const directoryInputRef = useRef<HTMLInputElement>(null);
+  const stagingRequestIdRef = useRef(0);
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
+      stagingRequestIdRef.current += 1;
       setError(null);
       setFolderImportSummary(null);
+      setProcessingJob(null);
+      setProcessingEvents([]);
       setImportedProjectId(null);
+      setSourceRoot("");
+      setStagingMaterials(false);
       setOpenedMaterials([]);
       setMaterialPreview(null);
     }
@@ -468,47 +479,77 @@ function StudyImportDialog({
     }
   };
 
-  const applyFolderImport = ({
-    snapshot,
-    result,
-  }: Awaited<ReturnType<typeof importStudyFolder>>) => {
-    onFolderImported(snapshot.dataset);
-    setImportedProjectId(result.projectId);
-    setFolderImportSummary(
-      `Imported ${result.importedDocumentCount} files and ${result.questionCandidateCount} question candidates.`,
-    );
-    setSourceRoot("");
-  };
-
   const openFolderPath = (folderPath: string) => {
+    stagingRequestIdRef.current += 1;
     setSourceRoot(folderPath);
+    setStagingMaterials(false);
+    setOpenedMaterials([]);
     setImportedProjectId(null);
     setError(null);
     setFolderImportSummary(
-      `Opened ${folderPath}. Source extraction will run when you choose Extract sources.`,
+      `Opened ${folderPath}. Course processing will run when you choose Process course.`,
     );
   };
 
-  const importFolderPath = (folderPath: string) => {
+  const processFolderPath = (folderPath: string) => {
     setImportingFolder(true);
     setError(null);
     setFolderImportSummary(null);
-    void importStudyFolder({ projectId, sourceRoot: folderPath })
-      .then(applyFolderImport)
-      .catch((cause) => {
-        setError(cause instanceof Error ? cause.message : "Could not import this folder.");
+    setProcessingEvents([]);
+    void startStudyCourseProcessing({ projectId, sourceRoot: folderPath })
+      .then(({ job }) => {
+        setProcessingJob(job);
+        setFolderImportSummary(job.message);
       })
-      .finally(() => {
+      .catch((cause) => {
+        setError(cause instanceof Error ? cause.message : "Could not process this folder.");
         setImportingFolder(false);
       });
   };
 
-  const handleCheckPriorities = () => {
-    if (!importedProjectId || analyzingProject) return;
-    void onCheckPriorities(importedProjectId).then(() => {
-      handleOpenChange(false);
-    });
-  };
+  useEffect(() => {
+    if (!processingJob || !["queued", "running"].includes(processingJob.status)) return;
+    let cancelled = false;
+    const poll = () => {
+      void Promise.all([
+        getStudyProcessingJob(processingJob.id),
+        getStudyProcessingEvents(processingJob.id),
+      ])
+        .then(async ([jobResponse, eventsResponse]) => {
+          if (cancelled) return;
+          setProcessingEvents(eventsResponse.events);
+          const nextJob = jobResponse.job;
+          if (!nextJob) return;
+          setProcessingJob(nextJob);
+          setFolderImportSummary(nextJob.message);
+          if (nextJob.status === "succeeded") {
+            const snapshotResponse = await loadStudyFrameSnapshot();
+            if (snapshotResponse.snapshot) {
+              onFolderImported(snapshotResponse.snapshot.dataset);
+              setImportedProjectId(nextJob.projectId);
+            }
+            setImportingFolder(false);
+            setSourceRoot("");
+          } else if (nextJob.status === "failed" || nextJob.status === "cancelled") {
+            setImportingFolder(false);
+            if (nextJob.status === "failed") {
+              setError(nextJob.error ?? nextJob.message);
+            }
+          }
+        })
+        .catch((cause) => {
+          if (cancelled) return;
+          setImportingFolder(false);
+          setError(cause instanceof Error ? cause.message : "Could not poll processing progress.");
+        });
+    };
+    const timer = window.setInterval(poll, 1_000);
+    poll();
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [onFolderImported, processingJob]);
 
   const handleOpenFolder = () => {
     if (importingFolder) return;
@@ -531,13 +572,35 @@ function StudyImportDialog({
     if (files.length === 0) return;
     const materials = makeOpenedSourceMaterials(files);
     const rootName = openedSourceRootName(materials);
+    const requestId = stagingRequestIdRef.current + 1;
+    stagingRequestIdRef.current = requestId;
     setOpenedMaterials(materials);
     setMaterialPreview(null);
     setImportedProjectId(null);
+    setSourceRoot("");
+    setStagingMaterials(true);
     setError(null);
     setFolderImportSummary(
-      `Opened ${materials.length} ${materials.length === 1 ? "material" : "materials"} from ${rootName}. No files were uploaded.`,
+      `Preparing ${materials.length} ${materials.length === 1 ? "material" : "materials"} from ${rootName} for processing.`,
     );
+    void stageStudySourceMaterials(materials, rootName)
+      .then((staged) => {
+        if (stagingRequestIdRef.current !== requestId) return;
+        setSourceRoot(staged.sourceRoot);
+        setFolderImportSummary(
+          `Prepared ${staged.materialCount} ${staged.materialCount === 1 ? "material" : "materials"} from ${rootName}. Choose Process course to begin.`,
+        );
+      })
+      .catch((cause) => {
+        if (stagingRequestIdRef.current !== requestId) return;
+        setError(
+          cause instanceof Error ? cause.message : "Could not prepare the selected sources.",
+        );
+        setFolderImportSummary(null);
+      })
+      .finally(() => {
+        if (stagingRequestIdRef.current === requestId) setStagingMaterials(false);
+      });
   };
 
   const handleDirectoryChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -564,8 +627,40 @@ function StudyImportDialog({
 
   const handleExtractSources = () => {
     const trimmedSourceRoot = sourceRoot.trim();
-    if (!trimmedSourceRoot || importingFolder) return;
-    importFolderPath(trimmedSourceRoot);
+    if (!trimmedSourceRoot || importingFolder || stagingMaterials) return;
+    processFolderPath(trimmedSourceRoot);
+  };
+
+  const handleCancelProcessing = () => {
+    if (!processingJob || !["queued", "running"].includes(processingJob.status)) {
+      handleOpenChange(false);
+      return;
+    }
+    void cancelStudyProcessingJob(processingJob.id)
+      .then((response) => {
+        if (response.job) setProcessingJob(response.job);
+        setImportingFolder(false);
+      })
+      .catch((cause) => {
+        setError(cause instanceof Error ? cause.message : "Could not cancel processing.");
+      });
+  };
+
+  const handleRetryProcessing = () => {
+    if (!processingJob || processingJob.status !== "failed") return;
+    setImportingFolder(true);
+    setError(null);
+    setProcessingEvents([]);
+    void retryStudyProcessingJob(processingJob.id)
+      .then(({ job }) => {
+        if (!job) return;
+        setProcessingJob(job);
+        setFolderImportSummary(job.message);
+      })
+      .catch((cause) => {
+        setImportingFolder(false);
+        setError(cause instanceof Error ? cause.message : "Could not retry processing.");
+      });
   };
 
   const handleMaterialPreview = (material: OpenedSourceMaterial) => {
@@ -592,10 +687,7 @@ function StudyImportDialog({
         setMaterialPreview({
           materialId: material.id,
           title: material.relativePath,
-          content:
-            material.size > 16_384
-              ? `${content}\n\n[Preview truncated at 16 KB. No upload performed.]`
-              : content,
+          content: material.size > 16_384 ? `${content}\n\n[Preview truncated at 16 KB.]` : content,
         });
       })
       .catch((cause) => {
@@ -627,7 +719,7 @@ function StudyImportDialog({
         <DialogHeader>
           <DialogTitle>Import course</DialogTitle>
           <DialogDescription>
-            Open a course folder or review a dropped material list first. Extraction runs only when
+            Open a course folder or review a dropped material list first. Processing runs only when
             you choose it.
           </DialogDescription>
         </DialogHeader>
@@ -659,17 +751,20 @@ function StudyImportDialog({
               <div className="min-w-0">
                 <div className="text-sm font-medium">Course folder</div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  Select a server-visible folder path for extraction, or open/drop materials here to
-                  inspect the source list without uploading.
+                  Select a course folder for processing, or open and review its material list first.
                 </div>
               </div>
-              <Button className="shrink-0" disabled={importingFolder} onClick={handleOpenFolder}>
-                {importingFolder ? (
+              <Button
+                className="shrink-0"
+                disabled={importingFolder || stagingMaterials}
+                onClick={handleOpenFolder}
+              >
+                {importingFolder || stagingMaterials ? (
                   <LoaderCircleIcon className="size-4 animate-spin" />
                 ) : (
                   <FolderOpenIcon className="size-4" />
                 )}
-                {importingFolder ? "Extracting" : "Open folder"}
+                {importingFolder ? "Processing" : stagingMaterials ? "Preparing" : "Open folder"}
               </Button>
               <input
                 ref={directoryInputRef}
@@ -688,11 +783,66 @@ function StudyImportDialog({
             >
               {dragActive
                 ? "Drop to open the material list"
-                : "Drag and drop materials or folders to list them"}
+                : "Drag and drop materials or folders to prepare them"}
             </div>
             {folderImportSummary ? (
               <div className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                 {folderImportSummary}
+              </div>
+            ) : null}
+            {processingJob ? (
+              <div className="mt-3 rounded-md border border-border bg-muted/20 p-3 text-xs">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium">{processingJob.stage.replaceAll("_", " ")}</span>
+                  <Badge
+                    variant={
+                      processingJob.status === "succeeded"
+                        ? "success"
+                        : processingJob.status === "failed"
+                          ? "destructive"
+                          : "outline"
+                    }
+                  >
+                    {processingJob.status}
+                  </Badge>
+                </div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.round(
+                          (processingJob.progressCurrent /
+                            Math.max(1, processingJob.progressTotal)) *
+                            100,
+                        ),
+                      )}%`,
+                    }}
+                  />
+                </div>
+                {processingEvents.length > 0 ? (
+                  <div className="mt-3 max-h-28 space-y-1 overflow-auto pr-1 text-muted-foreground">
+                    {processingEvents.slice(-6).map((event) => (
+                      <div
+                        key={event.id}
+                        className={event.level === "error" ? "text-destructive" : ""}
+                      >
+                        {event.message}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {processingJob.status === "failed" ? (
+                  <Button
+                    className="mt-3"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRetryProcessing}
+                  >
+                    Retry processing
+                  </Button>
+                ) : null}
               </div>
             ) : null}
             {openedMaterials.length > 0 ? (
@@ -702,7 +852,7 @@ function StudyImportDialog({
                     {openedMaterials.length} opened{" "}
                     {openedMaterials.length === 1 ? "material" : "materials"}
                   </span>
-                  <span>No upload</span>
+                  <span>{sourceRoot ? "Ready" : "Preparing"}</span>
                 </div>
                 <div className="max-h-40 space-y-1 overflow-auto pr-1">
                   {openedMaterials.slice(0, 60).map((material) => (
@@ -776,7 +926,7 @@ function StudyImportDialog({
                   </Button>
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  This records the path only. Extraction starts from the footer action.
+                  This records the path only. Processing starts from the footer action.
                 </div>
               </div>
 
@@ -819,21 +969,21 @@ function StudyImportDialog({
           ) : null}
         </DialogPanel>
         <DialogFooter>
-          <Button variant="outline" onClick={() => handleOpenChange(false)}>
+          <Button variant="outline" onClick={handleCancelProcessing}>
             Cancel
           </Button>
           {!importedProjectId ? (
             <Button
               variant="outline"
-              disabled={sourceRoot.trim().length === 0 || importingFolder}
+              disabled={sourceRoot.trim().length === 0 || importingFolder || stagingMaterials}
               onClick={handleExtractSources}
             >
-              {importingFolder ? (
+              {importingFolder || stagingMaterials ? (
                 <LoaderCircleIcon className="size-4 animate-spin" />
               ) : (
                 <FilePlus2Icon className="size-4" />
               )}
-              {importingFolder ? "Extracting" : "Extract sources"}
+              {importingFolder ? "Processing" : stagingMaterials ? "Preparing" : "Process course"}
             </Button>
           ) : null}
           {secondaryOptionsOpen && rawJson.trim().length > 0 ? (
@@ -841,14 +991,7 @@ function StudyImportDialog({
               Import JSON
             </Button>
           ) : null}
-          <Button disabled={!importedProjectId || analyzingProject} onClick={handleCheckPriorities}>
-            {analyzingProject ? (
-              <LoaderCircleIcon className="size-4 animate-spin" />
-            ) : (
-              <ClipboardCheckIcon className="size-4" />
-            )}
-            {analyzingProject ? "Checking priorities" : "Check priorities"}
-          </Button>
+          {importedProjectId ? <Button onClick={() => handleOpenChange(false)}>Done</Button> : null}
         </DialogFooter>
       </DialogPopup>
     </Dialog>

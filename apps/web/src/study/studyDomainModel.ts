@@ -15,6 +15,8 @@ type StudyDomainCollections = Pick<
   StudyDataset,
   | "sourceDocuments"
   | "sourceAssets"
+  | "sourceChunks"
+  | "sourceSecurityFindings"
   | "questionCandidates"
   | "topicClusters"
   | "questionClassifications"
@@ -29,6 +31,8 @@ type StudyDatasetWithOptionalDomain = Omit<StudyDataset, keyof StudyDomainCollec
 export function withDerivedStudyDomainModel(dataset: StudyDatasetWithOptionalDomain): StudyDataset {
   const sourceDocuments = dataset.sourceDocuments ?? deriveSourceDocuments(dataset);
   const sourceAssets = dataset.sourceAssets ?? [];
+  const sourceChunks = dataset.sourceChunks ?? [];
+  const sourceSecurityFindings = dataset.sourceSecurityFindings ?? [];
   const questionCandidates = dataset.questionCandidates ?? deriveQuestionCandidates(dataset);
   const topicClusters = dataset.topicClusters ?? deriveTopicClusters(dataset);
   const questionClassifications =
@@ -44,6 +48,8 @@ export function withDerivedStudyDomainModel(dataset: StudyDatasetWithOptionalDom
     ...dataset,
     sourceDocuments,
     sourceAssets,
+    sourceChunks,
+    sourceSecurityFindings,
     questionCandidates,
     topicClusters,
     questionClassifications,

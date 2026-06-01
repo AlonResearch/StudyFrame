@@ -176,9 +176,7 @@ describe("StudyWorkspace", () => {
       .element(page.getByText("Topic trap bank", { exact: true }))
       .not.toBeInTheDocument();
     await expect.element(page.getByText(/16 Hz/).first()).toBeInTheDocument();
-    await expect
-      .element(page.getByText("Using 500 instead of 0.5 seconds."))
-      .toBeInTheDocument();
+    await expect.element(page.getByText("Using 500 instead of 0.5 seconds.")).toBeInTheDocument();
     await expect
       .element(page.getByText("Convert milliseconds to seconds before computing Hz."))
       .not.toBeInTheDocument();
@@ -341,6 +339,7 @@ describe("StudySidebar", () => {
     }
     mounted = null;
     document.body.innerHTML = "";
+    vi.restoreAllMocks();
   });
 
   async function renderSidebar() {
@@ -423,7 +422,7 @@ describe("StudySidebar", () => {
       .element(dialog.getByRole("button", { name: "Open folder", exact: true }))
       .toBeInTheDocument();
     await expect
-      .element(dialog.getByText("Drag and drop materials or folders to list them"))
+      .element(dialog.getByText("Drag and drop materials or folders to prepare them"))
       .toBeInTheDocument();
     const directoryClick = vi
       .spyOn(HTMLInputElement.prototype, "click")
@@ -432,10 +431,7 @@ describe("StudySidebar", () => {
     expect(directoryClick).toHaveBeenCalledOnce();
     directoryClick.mockRestore();
     await expect
-      .element(dialog.getByRole("button", { name: "Extract sources", exact: true }))
-      .toBeDisabled();
-    await expect
-      .element(dialog.getByRole("button", { name: "Check priorities", exact: true }))
+      .element(dialog.getByRole("button", { name: "Process course", exact: true }))
       .toBeDisabled();
     await dialog.getByRole("button", { name: "Source material options", exact: true }).click();
     await dialog.getByRole("button", { name: "Example", exact: true }).click();
@@ -446,5 +442,40 @@ describe("StudySidebar", () => {
     await expect
       .element(page.getByText("Signal and Data Analysis", { exact: true }))
       .toBeInTheDocument();
+  });
+
+  it("stages a browser-selected folder and enables course processing", async () => {
+    vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ sourceRoot: "C:\\staged\\Signal", materialCount: 1 }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    await renderSidebar();
+    await page.getByRole("button", { name: "Import course", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Import course" });
+    const input = document.querySelector<HTMLInputElement>("input[webkitdirectory]");
+    expect(input).not.toBeNull();
+    const file = new File(["Question 1\nCompute the firing rate."], "quiz-2024.md", {
+      type: "text/markdown",
+    });
+    Object.defineProperty(file, "webkitRelativePath", {
+      configurable: true,
+      value: "Signal/quiz-2024.md",
+    });
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: transfer.files,
+    });
+    input?.dispatchEvent(new Event("change", { bubbles: true }));
+
+    await expect
+      .element(dialog.getByText("Prepared 1 material from Signal. Choose Process course to begin."))
+      .toBeInTheDocument();
+    await expect
+      .element(dialog.getByRole("button", { name: "Process course", exact: true }))
+      .toBeEnabled();
   });
 });
