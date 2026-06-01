@@ -110,7 +110,7 @@ describe("study import/export", () => {
       topicThread: studySeedData.topicThreads[0]!,
     });
 
-    expect(markdown).toContain("## Real Questions");
+    expect(markdown).toContain("## Real Past Questions");
     expect(markdown).toContain("## Generated Variants");
   });
 
@@ -137,7 +137,10 @@ describe("study import/export", () => {
     });
 
     expect(topic).toContain("## Brief Explanation");
-    expect(topic).toContain("<summary>Solution and watch-outs</summary>");
+    expect(topic).toContain("## Definitions and Formulas");
+    expect(topic).toContain("## High-Yield Skills");
+    expect(topic).toContain("## Problems");
+    expect(topic).toContain("## Step-by-Step Solutions");
     expect(review).toContain("# Spike-train statistics Review Material");
     expect(review).toContain("## Questions To Review");
     expect(mistakes).toContain("# Mistakes Review");

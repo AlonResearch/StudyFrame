@@ -898,6 +898,7 @@ function TopicWorkspace({
 }: {
   readonly activeQuestion: StudyQuestion | null;
   readonly activePracticeItem: {
+    readonly promptMarkdown: string;
     readonly answerInputType: StudyAnswerInputType;
     readonly sourceMetadataJson: unknown;
   } | null;
@@ -971,6 +972,7 @@ function TopicWorkspace({
           commonMistakes={commonMistakes}
           bestAttempt={getBestAttempt(attempts, activeQuestion.id)}
           attempts={questionAttempts}
+          promptMarkdown={activePracticeItem?.promptMarkdown ?? activeQuestion.rawPrompt}
           answerInputType={activePracticeItem?.answerInputType ?? "free_text"}
           sourceMetadataJson={activePracticeItem?.sourceMetadataJson ?? null}
           onAnswerDraftChange={onAnswerDraftChange}
@@ -1077,14 +1079,14 @@ function TopicTheoryReview({ topicModule }: { readonly topicModule: StudyTopicMo
         <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
           Step 1
         </div>
-        <h2 className="mt-1 text-base font-semibold">Brief explanation</h2>
+        <h2 className="mt-1 text-base font-semibold">Study guide</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Quick theory, definitions, and formulas before the current question.
+          Brief explanation, formulas, problems, and traps before the current question.
         </p>
       </div>
       {hasBriefExplanation ? (
         <section>
-          <h3 className="text-xs font-medium text-muted-foreground">What this topic is about</h3>
+          <h3 className="text-xs font-medium text-muted-foreground">Brief Explanation</h3>
           <StudyMarkdown className="mt-2" content={review.briefExplanationMarkdown} />
         </section>
       ) : null}
@@ -1099,7 +1101,7 @@ function TopicTheoryReview({ topicModule }: { readonly topicModule: StudyTopicMo
       ) : null}
       {review.recurringQuestionTypes.length > 0 ? (
         <section>
-          <h3 className="text-xs font-medium text-muted-foreground">Recurring question types</h3>
+          <h3 className="text-xs font-medium text-muted-foreground">Subtopics</h3>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {review.recurringQuestionTypes.map((subtype) => (
               <Badge key={subtype} size="sm" variant="outline">
@@ -1121,9 +1123,7 @@ function TopicTheoryReview({ topicModule }: { readonly topicModule: StudyTopicMo
       ) : null}
       {review.questionPatterns.length > 0 ? (
         <section>
-          <h3 className="text-xs font-medium text-muted-foreground">
-            How these questions usually work
-          </h3>
+          <h3 className="text-xs font-medium text-muted-foreground">Recurring question types</h3>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed">
             {review.questionPatterns.map((pattern) => (
               <li key={pattern}>{pattern}</li>
@@ -1133,7 +1133,7 @@ function TopicTheoryReview({ topicModule }: { readonly topicModule: StudyTopicMo
       ) : null}
       {review.practiceDrills.length > 0 ? (
         <section>
-          <h3 className="text-xs font-medium text-muted-foreground">Quiz-style drills</h3>
+          <h3 className="text-xs font-medium text-muted-foreground">Problems</h3>
           <div className="mt-2 space-y-2">
             {review.practiceDrills.map((drill) => (
               <article
@@ -1180,8 +1180,15 @@ function TopicTheoryReview({ topicModule }: { readonly topicModule: StudyTopicMo
 
 function getTopicReviewSections(topicModule: StudyTopicModule) {
   return {
-    briefExplanationMarkdown: topicModule.theorySummaryMarkdown,
-    definitionsAndFormulasMarkdown: topicModule.formulaSheetMarkdown,
+    briefExplanationMarkdown: stripLeadingMarkdownHeading(topicModule.theorySummaryMarkdown, [
+      "brief explanation",
+      "theory summary",
+    ]),
+    definitionsAndFormulasMarkdown: stripLeadingMarkdownHeading(topicModule.formulaSheetMarkdown, [
+      "definitions and formulas",
+      "formula reminders",
+      "formulas",
+    ]),
     recurringQuestionTypes: getTopicModuleSubtypes(topicModule.subtypeCoverageJson),
     highYieldSkills: getTopicModuleStringArray(topicModule.subtypeCoverageJson, "highYieldSkills"),
     questionPatterns: getTopicModuleStringArray(
@@ -1190,8 +1197,18 @@ function getTopicReviewSections(topicModule: StudyTopicModule) {
     ),
     practiceDrills: getTopicModulePracticeDrills(topicModule.subtypeCoverageJson),
     solveFlow: getTopicModuleStringArray(topicModule.subtypeCoverageJson, "studyFlow"),
-    commonTrapsMarkdown: topicModule.commonTrapsMarkdown,
+    commonTrapsMarkdown: stripLeadingMarkdownHeading(topicModule.commonTrapsMarkdown, [
+      "common traps",
+    ]),
   };
+}
+
+function stripLeadingMarkdownHeading(markdown: string, headings: readonly string[]): string {
+  const escapedHeadings = headings.map((heading) =>
+    heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+"),
+  );
+  const pattern = new RegExp(`^\\s*#{1,6}\\s*(?:${escapedHeadings.join("|")})\\s*\\n+`, "i");
+  return markdown.replace(pattern, "").trim();
 }
 
 function getTopicModuleSubtypes(subtypeCoverageJson: unknown): string[] {
@@ -1390,6 +1407,7 @@ function QuestionPracticePanel({
   commonMistakes,
   bestAttempt,
   attempts,
+  promptMarkdown,
   answerInputType,
   sourceMetadataJson,
   onAnswerDraftChange,
@@ -1414,6 +1432,7 @@ function QuestionPracticePanel({
   readonly commonMistakes: readonly string[];
   readonly bestAttempt: ReturnType<typeof getBestAttempt>;
   readonly attempts: readonly StudyAttempt[];
+  readonly promptMarkdown: string;
   readonly answerInputType: StudyAnswerInputType;
   readonly sourceMetadataJson: unknown;
   readonly onAnswerDraftChange: (answer: string) => void;
@@ -1476,7 +1495,7 @@ function QuestionPracticePanel({
             Step 2
           </div>
           <h2 className="mt-1 text-base font-semibold">Question</h2>
-          <StudyMarkdown className="mt-3 text-[15px]" content={question.rawPrompt} />
+          <StudyMarkdown className="mt-3 text-[15px]" content={promptMarkdown} />
         </section>
 
         {!answerRevealed ? (

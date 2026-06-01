@@ -183,6 +183,7 @@ function deriveTopicModules(
         subtypes: cluster?.subtypes ?? review.subtypes,
         highYieldSkills: review.highYieldSkills,
         questionPatterns: review.questionPatterns,
+        practiceDrills: review.practiceDrills,
         studyFlow: review.studyFlow,
       },
       firstExposureComplete: thread.firstExposureComplete,
@@ -199,6 +200,11 @@ function getDefaultTopicReview(
   readonly subtypes: readonly string[];
   readonly highYieldSkills: readonly string[];
   readonly questionPatterns: readonly string[];
+  readonly practiceDrills: readonly {
+    readonly title: string;
+    readonly sourceAnchors: readonly string[];
+    readonly promptMarkdown: string;
+  }[];
   readonly studyFlow: readonly string[];
   readonly commonTrapsMarkdown: string;
 } {
@@ -238,6 +244,20 @@ function getDefaultTopicReview(
         "Given spike counts across trials or windows, compute rate, variance, and Fano factor.",
         "Given ISIs, compute mean interval, CV, and regularity relative to Poisson.",
         "Given a spike-generation rule, reason about hazard, refractoriness, and whether the process is Poisson-like.",
+      ],
+      practiceDrills: [
+        {
+          title: "Rate and Fano factor from counts",
+          sourceAnchors: ["Quiz 2024 Q2"],
+          promptMarkdown:
+            "A neuron is observed across equal windows. Compute the mean firing rate, the Fano factor, and state whether the count variability is below, equal to, or above the Poisson benchmark.",
+        },
+        {
+          title: "CV from inter-spike intervals",
+          sourceAnchors: ["Quiz 2023 Q1"],
+          promptMarkdown:
+            "Given a mean ISI and an ISI standard deviation, compute the coefficient of variation and interpret the spike-train regularity relative to a Poisson process.",
+        },
       ],
       studyFlow: [
         "Identify whether the random quantity is count, interval, or hazard.",
@@ -289,6 +309,20 @@ function getDefaultTopicReview(
         "Given neural responses and stimuli, estimate entropy and information from empirical distributions.",
         "Compare spike-count entropy with spike-pattern entropy and explain what timing adds.",
       ],
+      practiceDrills: [
+        {
+          title: "Entropy from a probability table",
+          sourceAnchors: ["Quiz 2024 information theory"],
+          promptMarkdown:
+            "A categorical state has four probabilities. Compute the entropy in bits, compare it to the maximum possible entropy, and explain what the distribution shape means.",
+        },
+        {
+          title: "Mutual information from binary features",
+          sourceAnchors: ["Quiz 2024 information theory"],
+          promptMarkdown:
+            "Given a table of states and binary features, compute which feature reduces the most uncertainty about the state. State the mutual-information interpretation in words.",
+        },
+      ],
       studyFlow: [
         "Build the probability table.",
         "Check normalization and compute marginals.",
@@ -309,6 +343,7 @@ function getDefaultTopicReview(
     subtypes: [],
     highYieldSkills: [],
     questionPatterns: [],
+    practiceDrills: [],
     studyFlow: [],
     commonTrapsMarkdown: "",
   };

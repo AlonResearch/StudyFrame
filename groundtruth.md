@@ -124,7 +124,10 @@ same server-visible folder pipeline as desktop-selected paths. On `/settings/*` 
 shell sidebar renders the inherited settings section navigation instead of the course/topic tree.
 
 The study workspace header exposes a three-dots `Extra information` menu on course dashboards for
-course details or markdown reports in the shared right-side overlay sheet. Topic practice is one
+course details or markdown reports in the shared right-side overlay sheet. Topic Markdown exports
+mirror the app-native golden-study-guide shape with priority, subtopics, brief explanation,
+definitions/formulas, high-yield skills, recurring question types, problems, step-by-step solutions
+when included, and common traps. Topic practice is one
 reading sheet: a compact topic header, brief explanation, workflow progress, and the active question
 remain in one surface while questions switch in place. The topic review renders the StudyFrame topic
 module as a manual-study equivalent with optional agent-fillable sections: brief explanation,
@@ -140,6 +143,9 @@ shown as escaped plain text metadata and are ignored as source instructions. Ans
 starts closed after course or topic navigation so the primary dashboard and answer workspace keep
 their full width. The next-question action stays hidden until the visible answer has been submitted
 or explicitly revealed.
+When a provider supplies a cleaned practice prompt, the main practice card and topic exports render
+that learner-facing prompt instead of the raw extracted source text while retaining raw source text in
+source/detail surfaces.
 Study prompts, refreshers, revealed solution steps, and solution-review steps render markdown with
 KaTeX equation support.
 
@@ -293,6 +299,10 @@ app-native and spoiler-safe before practice: brief explanation, definitions/form
 high-yield skills, recurring question patterns, representative unsolved quiz-style drills, solve
 flow, and generic common traps. Final numeric answers, rubrics, worked solutions, and
 question-specific watch-outs stay in question support and render only after submit or reveal.
+The provider question-support prompt also asks for `cleanedPromptMarkdown` as a structured,
+learner-facing problem statement: preserve required numbers, units, file names, and data references;
+remove quiz-level administrivia and extraction noise; split multipart work into readable Markdown;
+and never add answers, solution steps, rubric keywords, or answer-revealing traps.
 
 The topic practice footer exposes one progressive help action: direction check, then hint, then
 show answer. The latest assistance message replaces the prior assistance message instead of

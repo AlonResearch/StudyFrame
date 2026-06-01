@@ -9,7 +9,9 @@ import {
 import type {
   StudyAttempt,
   StudyDataset,
+  StudyPracticeItem,
   StudyQuestion,
+  StudyQuestionCandidate,
   StudyQuestionClassification,
   StudyTopicCluster,
   StudyTopicModule,
@@ -85,23 +87,35 @@ export function exportTopicThread(input: {
     "",
     `Priority: ${cluster ? `${priorityLabel(cluster)} (${Math.round(cluster.priorityScore * 100)})` : Math.round(input.topicThread.priorityScore * 100)}`,
     "",
-    "## Brief Explanation",
-    "",
-    module?.theorySummaryMarkdown || input.topicThread.summary,
-    "",
   ];
 
-  if (module?.formulaSheetMarkdown.trim()) {
-    lines.push("## Formula Reminders", "", module.formulaSheetMarkdown, "");
-  }
+  appendTopicStudyGuideSections(lines, module, input.topicThread.summary, {
+    includeProblems: true,
+  });
 
   lines.push(
-    "## Real Questions",
+    "## Real Past Questions",
     "",
     "Try solving these before opening the solution sections.",
     "",
   );
-  appendGroupedQuestions(lines, input.dataset, input.attempts, questions.filter(isRealQuestion));
+  appendGroupedQuestions(lines, input.dataset, input.attempts, questions.filter(isRealQuestion), {
+    includeSolutions: false,
+  });
+
+  const realWithSolutions = questions.filter(
+    (question) =>
+      question.isRealQuestion &&
+      (getQuestionSupport(input.dataset, question.id)?.solutionSteps.length ||
+        getQuestionSupport(input.dataset, question.id)?.commonMistakes.length),
+  );
+  if (realWithSolutions.length > 0) {
+    lines.push("## Step-by-Step Solutions", "");
+    appendGroupedQuestions(lines, input.dataset, input.attempts, realWithSolutions, {
+      includePrompts: false,
+      includeSolutions: true,
+    });
+  }
 
   const generated = questions.filter((question) => !question.isRealQuestion);
   if (generated.length > 0) {
@@ -111,7 +125,18 @@ export function exportTopicThread(input: {
       "These are separate from real-question performance.",
       "",
     );
-    appendGroupedQuestions(lines, input.dataset, input.attempts, generated);
+    appendGroupedQuestions(lines, input.dataset, input.attempts, generated, {
+      includeSolutions: true,
+    });
+  }
+
+  if (module?.commonTrapsMarkdown.trim()) {
+    lines.push(
+      "## Common Traps",
+      "",
+      stripLeadingMarkdownHeading(module.commonTrapsMarkdown, ["common traps"]),
+      "",
+    );
   }
 
   return lines.join("\n");
@@ -130,18 +155,11 @@ export function exportReviewMaterial(input: {
     const best = getBestAttempt(input.attempts, question.id);
     return !best || best.scorePercent < 100;
   });
-  const lines = [
-    `# ${input.topicThread.displayName} Review Material`,
-    "",
-    "## Theory Summary",
-    "",
-    module?.theorySummaryMarkdown || input.topicThread.summary,
-    "",
-  ];
+  const lines = [`# ${input.topicThread.displayName} Review Material`, ""];
 
-  if (module?.formulaSheetMarkdown.trim()) {
-    lines.push("## Formula Reminders", "", module.formulaSheetMarkdown, "");
-  }
+  appendTopicStudyGuideSections(lines, module, input.topicThread.summary, {
+    includeProblems: true,
+  });
   lines.push(
     "## Questions To Review",
     "",
@@ -150,7 +168,18 @@ export function exportReviewMaterial(input: {
       : "No below-100% real questions remain.",
     "",
   );
-  appendGroupedQuestions(lines, input.dataset, input.attempts, reviewQuestions);
+  appendGroupedQuestions(lines, input.dataset, input.attempts, reviewQuestions, {
+    includeSolutions: true,
+  });
+
+  if (module?.commonTrapsMarkdown.trim()) {
+    lines.push(
+      "## Common Traps",
+      "",
+      stripLeadingMarkdownHeading(module.commonTrapsMarkdown, ["common traps"]),
+      "",
+    );
+  }
 
   return lines.join("\n");
 }
@@ -309,7 +338,7 @@ export function exportMistakesReview(input: {
       `- Best score: ${best?.scorePercent ?? 0}%`,
       `- Source: ${question.sourceAnchor}`,
       "",
-      question.rawPrompt,
+      questionPromptMarkdown(input.dataset, question),
       "",
       "### Review Steps",
       "",
@@ -336,27 +365,36 @@ function appendGroupedQuestions(
   dataset: StudyDataset,
   attempts: readonly StudyAttempt[],
   questions: readonly StudyQuestion[],
+  options: {
+    readonly includePrompts?: boolean;
+    readonly includeSolutions?: boolean;
+  } = {},
 ) {
+  const includePrompts = options.includePrompts ?? true;
+  const includeSolutions = options.includeSolutions ?? true;
   for (const [subtype, subtypeQuestions] of groupQuestionsBySubtype(dataset, questions)) {
     lines.push(`### ${subtype}`, "");
-    for (const question of subtypeQuestions) {
+    for (const [index, question] of subtypeQuestions.entries()) {
       const support = getQuestionSupport(dataset, question.id);
       const bestAttempt = getBestAttempt(attempts, question.id);
-      lines.push(
-        `#### ${question.sourceQuizLabel}`,
-        "",
-        `- Source: ${question.sourceAnchor}`,
-        `- Points: ${question.pointValue}`,
-        `- Best score: ${bestAttempt ? `${bestAttempt.scorePercent}%` : "not attempted"}`,
-        "",
-        question.rawPrompt,
-        "",
-      );
-      if (support && (support.solutionSteps.length > 0 || support.commonMistakes.length > 0)) {
+      const headingPrefix = includePrompts ? "Problem" : "Solution";
+      lines.push(`#### ${headingPrefix} ${index + 1}: ${question.sourceQuizLabel}`, "");
+      if (includePrompts) {
         lines.push(
-          "<details>",
-          "<summary>Solution and watch-outs</summary>",
+          `- Source: ${question.sourceAnchor}`,
+          `- Points: ${question.pointValue}`,
+          `- Best score: ${bestAttempt ? `${bestAttempt.scorePercent}%` : "not attempted"}`,
           "",
+          questionPromptMarkdown(dataset, question),
+          "",
+        );
+      }
+      if (
+        includeSolutions &&
+        support &&
+        (support.solutionSteps.length > 0 || support.commonMistakes.length > 0)
+      ) {
+        lines.push(
           "##### Step-by-Step Solution",
           "",
           ...(support.solutionSteps.length > 0
@@ -369,11 +407,86 @@ function appendGroupedQuestions(
             ? support.commonMistakes.map((mistake) => `- ${mistake}`)
             : ["- No generated watch-outs are available."]),
           "",
-          "</details>",
-          "",
         );
       }
     }
+  }
+}
+
+function appendTopicStudyGuideSections(
+  lines: string[],
+  module: StudyTopicModule | null,
+  fallbackSummary: string,
+  options: { readonly includeProblems: boolean },
+) {
+  const coverage = module ? getTopicModuleCoverage(module) : emptyTopicCoverage();
+  if (coverage.subtopics.length > 0) {
+    lines.push(`Subtopics: ${coverage.subtopics.join(", ")}`, "");
+  }
+
+  lines.push(
+    "## Brief Explanation",
+    "",
+    stripLeadingMarkdownHeading(module?.theorySummaryMarkdown || fallbackSummary, [
+      "brief explanation",
+      "theory summary",
+    ]),
+    "",
+  );
+
+  if (module?.formulaSheetMarkdown.trim()) {
+    lines.push(
+      "## Definitions and Formulas",
+      "",
+      stripLeadingMarkdownHeading(module.formulaSheetMarkdown, [
+        "definitions and formulas",
+        "formula reminders",
+        "formulas",
+      ]),
+      "",
+    );
+  }
+
+  if (coverage.highYieldSkills.length > 0) {
+    lines.push(
+      "## High-Yield Skills",
+      "",
+      ...coverage.highYieldSkills.map((skill) => `- ${skill}`),
+      "",
+    );
+  }
+
+  if (coverage.questionPatterns.length > 0) {
+    lines.push(
+      "## Recurring Question Types",
+      "",
+      ...coverage.questionPatterns.map((pattern) => `- ${pattern}`),
+      "",
+    );
+  }
+
+  if (options.includeProblems && coverage.practiceDrills.length > 0) {
+    lines.push("## Problems", "", "Try solving these before reading the solutions.", "");
+    for (const [index, drill] of coverage.practiceDrills.entries()) {
+      lines.push(
+        `### Problem ${index + 1}: ${drill.title}`,
+        "",
+        ...(drill.sourceAnchors.length > 0
+          ? [`Based on: ${drill.sourceAnchors.join(", ")}`, ""]
+          : []),
+        drill.promptMarkdown,
+        "",
+      );
+    }
+  }
+
+  if (coverage.studyFlow.length > 0) {
+    lines.push(
+      "## Solve Flow",
+      "",
+      ...coverage.studyFlow.map((step, index) => `${index + 1}. ${step}`),
+      "",
+    );
   }
 }
 
@@ -389,6 +502,104 @@ function groupQuestionsBySubtype(
     groups.set(subtype, entries);
   }
   return [...groups.entries()].toSorted(([left], [right]) => left.localeCompare(right));
+}
+
+interface TopicModuleCoverage {
+  readonly subtopics: readonly string[];
+  readonly highYieldSkills: readonly string[];
+  readonly questionPatterns: readonly string[];
+  readonly studyFlow: readonly string[];
+  readonly practiceDrills: readonly TopicPracticeDrill[];
+}
+
+interface TopicPracticeDrill {
+  readonly title: string;
+  readonly sourceAnchors: readonly string[];
+  readonly promptMarkdown: string;
+}
+
+function emptyTopicCoverage(): TopicModuleCoverage {
+  return {
+    subtopics: [],
+    highYieldSkills: [],
+    questionPatterns: [],
+    studyFlow: [],
+    practiceDrills: [],
+  };
+}
+
+function getTopicModuleCoverage(module: StudyTopicModule): TopicModuleCoverage {
+  const value = module.subtypeCoverageJson;
+  if (typeof value !== "object" || value === null) return emptyTopicCoverage();
+  return {
+    subtopics: stringArrayFromCoverage(value, "subtypes"),
+    highYieldSkills: stringArrayFromCoverage(value, "highYieldSkills"),
+    questionPatterns: stringArrayFromCoverage(value, "questionPatterns"),
+    studyFlow: stringArrayFromCoverage(value, "studyFlow"),
+    practiceDrills: practiceDrillsFromCoverage(value),
+  };
+}
+
+function stringArrayFromCoverage(value: object, key: string): string[] {
+  const candidate = (value as Record<string, unknown>)[key];
+  return Array.isArray(candidate)
+    ? candidate.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+}
+
+function practiceDrillsFromCoverage(value: object): TopicPracticeDrill[] {
+  const candidate = (value as Record<string, unknown>).practiceDrills;
+  if (!Array.isArray(candidate)) return [];
+  return candidate.flatMap((item): TopicPracticeDrill[] => {
+    if (typeof item !== "object" || item === null) return [];
+    const record = item as Record<string, unknown>;
+    const title = typeof record.title === "string" ? record.title.trim() : "";
+    const promptMarkdown =
+      typeof record.promptMarkdown === "string" ? record.promptMarkdown.trim() : "";
+    const sourceAnchors = Array.isArray(record.sourceAnchors)
+      ? record.sourceAnchors.filter(
+          (sourceAnchor): sourceAnchor is string =>
+            typeof sourceAnchor === "string" && sourceAnchor.trim().length > 0,
+        )
+      : [];
+    return title && promptMarkdown ? [{ title, sourceAnchors, promptMarkdown }] : [];
+  });
+}
+
+function questionPromptMarkdown(dataset: StudyDataset, question: StudyQuestion): string {
+  return getPracticeItemForQuestion(dataset, question)?.promptMarkdown.trim() || question.rawPrompt;
+}
+
+function stripLeadingMarkdownHeading(markdown: string, headings: readonly string[]): string {
+  const escapedHeadings = headings.map((heading) =>
+    heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+"),
+  );
+  const pattern = new RegExp(`^\\s*#{1,6}\\s*(?:${escapedHeadings.join("|")})\\s*\\n+`, "i");
+  return markdown.replace(pattern, "").trim();
+}
+
+function getPracticeItemForQuestion(
+  dataset: StudyDataset,
+  question: StudyQuestion,
+): StudyPracticeItem | null {
+  const candidate = getQuestionCandidate(dataset, question);
+  if (!candidate) return null;
+  return (
+    dataset.practiceItems?.find((item) => item.sourceQuestionCandidateId === candidate.id) ?? null
+  );
+}
+
+function getQuestionCandidate(
+  dataset: StudyDataset,
+  question: StudyQuestion,
+): StudyQuestionCandidate | null {
+  return (
+    dataset.questionCandidates?.find(
+      (candidate) =>
+        candidate.documentId === question.documentId &&
+        candidate.sourceAnchor === question.sourceAnchor,
+    ) ?? null
+  );
 }
 
 function getTopicModule(

@@ -118,17 +118,16 @@ describe("StudyWorkspace", () => {
       .element(page.getByRole("button", { name: "Generate similar questions", exact: true }))
       .not.toBeInTheDocument();
     await expect
-      .element(page.getByRole("heading", { name: "Brief explanation", exact: true }))
+      .element(page.getByRole("heading", { name: "Study guide", exact: true }))
       .toBeVisible();
-    await expect.element(page.getByText("What this topic is about", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("Brief Explanation", { exact: true })).toBeVisible();
     await expect
       .element(page.getByText("Use firing rate when the question gives spike counts"))
       .toBeVisible();
     await expect.element(page.getByText("Definitions and formulas", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("Subtopics", { exact: true })).toBeVisible();
     await expect.element(page.getByText("Recurring question types", { exact: true })).toBeVisible();
-    await expect
-      .element(page.getByText("How these questions usually work", { exact: true }))
-      .toBeVisible();
+    await expect.element(page.getByText("Problems", { exact: true })).toBeVisible();
     await expect.element(page.getByText("Solve flow", { exact: true })).toBeVisible();
     await expect
       .element(page.getByText("Convert milliseconds to seconds before computing Hz."))
@@ -261,7 +260,7 @@ describe("StudyWorkspace", () => {
       .element(page.getByText(/Given inter-spike intervals with mean 25 ms/))
       .toBeInTheDocument();
     await expect
-      .element(page.getByRole("heading", { name: "Brief explanation", exact: true }))
+      .element(page.getByRole("heading", { name: "Study guide", exact: true }))
       .toBeVisible();
     await showCurrentAnswer();
 

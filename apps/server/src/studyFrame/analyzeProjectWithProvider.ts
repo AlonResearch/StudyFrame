@@ -33,7 +33,7 @@ import {
   resolveOptionalStudyFrameTextGeneration,
 } from "./providerTextGeneration.ts";
 
-export const STUDYFRAME_ANALYSIS_PROMPT_VERSION = "studyframe-analysis-v2";
+export const STUDYFRAME_ANALYSIS_PROMPT_VERSION = "studyframe-analysis-v3";
 export const STUDYFRAME_CLASSIFICATION_PROMPT_VERSION = "studyframe-classification-v1";
 const DEFAULT_SOURCE_CLASSIFICATION_BATCH_SIZE = 50;
 const TOPIC_MODULE_BATCH_SIZE = 4;
@@ -299,9 +299,9 @@ function buildProviderTopicModulesPrompt(
     "Return only schema-valid JSON with exactly one topicModules item for every supplied topicClusterId.",
     "Keep this topic guide spoiler-safe before practice: do not include final numeric answers, expected answers, rubric keywords, or step-by-step solutions for the supplied real questions.",
     "Do synthesize across all supplied real questions for each topic. Do not write thin generic textbook summaries.",
-    "theorySummaryMarkdown should be the ## Brief Explanation equivalent: concise, exam-oriented, and structured with bullets where useful.",
-    "formulaSheetMarkdown should include core quantities, formulas, units, useful log/probability values, and interpretation rules when relevant. Leave it empty only when formulas are genuinely irrelevant.",
-    "commonTrapsMarkdown should list generic topic-level traps only. Do not include question-specific solution traps that reveal an answer.",
+    "theorySummaryMarkdown should be the Brief Explanation content: concise, exam-oriented, and structured with bullets where useful. Do not include a 'Brief Explanation' heading; StudyFrame renders that heading.",
+    "formulaSheetMarkdown should include core quantities, formulas, units, useful log/probability values, and interpretation rules when relevant. Do not include a 'Definitions and Formulas' heading. Leave it empty only when formulas are genuinely irrelevant.",
+    "commonTrapsMarkdown should list generic topic-level traps only. Do not include a 'Common Traps' heading, and do not include question-specific solution traps that reveal an answer.",
     "subtopics, highYieldSkills, questionPatterns, and studyFlow should be concise arrays extracted from the supplied real questions.",
     "practiceDrills should contain 1-3 representative unsolved quiz-style prompts synthesized from the supplied real questions. They may mention sourceAnchors, but must not include answers or solution steps.",
     JSON.stringify(
@@ -374,7 +374,12 @@ function buildProviderQuestionSupportPrompt(
     "Return only schema-valid JSON. Use only the supplied questionId values.",
     "Produce hints, rubrics, step-by-step solutions, and question-specific commonMistakes for questions. These fields are hidden until submit or reveal.",
     "Choose an answerInputType for each question. Use free_text unless numeric, formula, choice, table, plot checklist, or file upload controls materially improve the answer workflow.",
-    "Return a cleanedPromptMarkdown transcription for each question. Preserve the question meaning and requested work, remove extraction noise, and never add an answer or solution.",
+    "Return cleanedPromptMarkdown as the learner-facing problem statement, not a verbatim source dump.",
+    "For cleanedPromptMarkdown, preserve every necessary number, unit, file name, table/figure/data reference, distribution, threshold, and requested task.",
+    "Remove quiz-level administrivia, exam instructions, unrelated formula sheets, extraction noise, repeated headers, and source boilerplate that is not needed to solve this one item.",
+    "Keep shared stems that are needed for this item, then make the actual task obvious with Markdown structure such as 'Given:' bullets and 'Task:' numbered items when useful.",
+    "For multipart prompts, split requested work into a readable numbered list. For true/false prompts, keep the claim text and the required explanation/counterexample instruction.",
+    "Never add an answer, solution step, rubric keyword, final numeric result, or answer-revealing trap to cleanedPromptMarkdown.",
     "Populate answerOptions for choice controls, tableColumns for tables, and plotChecklistItems for plot checklists. Otherwise return empty arrays.",
     "Do not omit real questions. Keep hints useful without directly giving away the final answer.",
     JSON.stringify(

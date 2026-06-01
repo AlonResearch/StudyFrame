@@ -220,7 +220,7 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
       );
       assert.equal(
         analyzed.snapshot.dataset.topicModules?.[0]?.generationMetadataJson?.promptVersion,
-        "studyframe-analysis-v2",
+        "studyframe-analysis-v3",
       );
       assert.include(
         analyzed.snapshot.dataset.projects[0]?.extractionWarnings ?? [],

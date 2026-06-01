@@ -77,6 +77,11 @@ action: direction check, then hint, then show answer. Showing the answer replace
 Source context belongs in the same extra-information drawer so it stays available without disturbing
 the solving flow.
 
+When StudyFrame exports Markdown for a topic, the export should mirror the same study-guide shape
+instead of becoming a separate product surface: priority, subtopics, brief explanation, definitions
+and formulas, high-yield skills, recurring question types, problems, step-by-step solutions when
+appropriate, and common traps.
+
 After the real questions are exhausted, offer:
 
 1. Repeat all real questions.
