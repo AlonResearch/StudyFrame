@@ -161,132 +161,141 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     cleanupPaths?: ReadonlyArray<string>;
     modelSelection: ModelSelection;
   }): Effect.fn.Return<S["Type"], TextGenerationError, S["DecodingServices"]> {
-    const schemaJson = yield* encodeJsonForOperation(
-      operation,
-      toJsonSchemaObject(outputSchemaJson),
-    );
-    const schemaPath = yield* writeTempFile(operation, "codex-schema", schemaJson);
-    const outputPath = yield* writeTempFile(operation, "codex-output", "");
+    return yield* Effect.scoped(
+      Effect.gen(function* () {
+        const schemaJson = yield* encodeJsonForOperation(
+          operation,
+          toJsonSchemaObject(outputSchemaJson),
+        );
+        const schemaPath = yield* writeTempFile(operation, "codex-schema", schemaJson);
+        const outputPath = yield* writeTempFile(operation, "codex-output", "");
 
-    const runCodexCommand = Effect.fn("runCodexJson.runCodexCommand")(function* () {
-      const reasoningEffort =
-        getModelSelectionStringOptionValue(modelSelection, "reasoningEffort") ??
-        CODEX_GIT_TEXT_GENERATION_REASONING_EFFORT;
-      const command = ChildProcess.make(
-        codexConfig.binaryPath || "codex",
-        [
-          "exec",
-          "--ephemeral",
-          "--skip-git-repo-check",
-          "-s",
-          "read-only",
-          "--model",
-          modelSelection.model,
-          "--config",
-          `model_reasoning_effort="${reasoningEffort}"`,
-          ...(getModelSelectionBooleanOptionValue(modelSelection, "fastMode") === true
-            ? ["--config", `service_tier="fast"`]
-            : []),
-          "--output-schema",
-          schemaPath,
-          "--output-last-message",
-          outputPath,
-          ...imagePaths.flatMap((imagePath) => ["--image", imagePath]),
-          "-",
-        ],
-        {
-          env: {
-            ...environment,
-            ...(codexConfig.homePath ? { CODEX_HOME: expandHomePath(codexConfig.homePath) } : {}),
-          },
-          cwd,
-          shell: process.platform === "win32",
-          stdin: {
-            stream: Stream.encodeText(Stream.make(prompt)),
-          },
-        },
-      );
+        const runCodexCommand = Effect.fn("runCodexJson.runCodexCommand")(function* () {
+          const reasoningEffort =
+            getModelSelectionStringOptionValue(modelSelection, "reasoningEffort") ??
+            CODEX_GIT_TEXT_GENERATION_REASONING_EFFORT;
+          const command = ChildProcess.make(
+            codexConfig.binaryPath || "codex",
+            [
+              "exec",
+              "--ephemeral",
+              "--skip-git-repo-check",
+              "-s",
+              "read-only",
+              "--model",
+              modelSelection.model,
+              "--config",
+              `model_reasoning_effort="${reasoningEffort}"`,
+              ...(getModelSelectionBooleanOptionValue(modelSelection, "fastMode") === true
+                ? ["--config", `service_tier="fast"`]
+                : []),
+              "--output-schema",
+              schemaPath,
+              "--output-last-message",
+              outputPath,
+              ...imagePaths.flatMap((imagePath) => ["--image", imagePath]),
+              "-",
+            ],
+            {
+              env: {
+                ...environment,
+                ...(codexConfig.homePath
+                  ? { CODEX_HOME: expandHomePath(codexConfig.homePath) }
+                  : {}),
+              },
+              cwd,
+              shell: process.platform === "win32",
+              stdin: {
+                stream: Stream.encodeText(Stream.make(prompt)),
+              },
+            },
+          );
 
-      const child = yield* commandSpawner
-        .spawn(command)
-        .pipe(
-          Effect.mapError((cause) =>
-            normalizeCliError("codex", operation, cause, "Failed to spawn Codex CLI process"),
+          const child = yield* commandSpawner
+            .spawn(command)
+            .pipe(
+              Effect.mapError((cause) =>
+                normalizeCliError("codex", operation, cause, "Failed to spawn Codex CLI process"),
+              ),
+            );
+
+          const [stdout, stderr, exitCode] = yield* Effect.all(
+            [
+              readStreamAsString(operation, child.stdout),
+              readStreamAsString(operation, child.stderr),
+              child.exitCode.pipe(
+                Effect.mapError((cause) =>
+                  normalizeCliError(
+                    "codex",
+                    operation,
+                    cause,
+                    "Failed to read Codex CLI exit code",
+                  ),
+                ),
+              ),
+            ],
+            { concurrency: "unbounded" },
+          );
+
+          if (exitCode !== 0) {
+            const stderrDetail = stderr.trim();
+            const stdoutDetail = stdout.trim();
+            const detail = stderrDetail.length > 0 ? stderrDetail : stdoutDetail;
+            return yield* new TextGenerationError({
+              operation,
+              detail:
+                detail.length > 0
+                  ? `Codex CLI command failed: ${detail}`
+                  : `Codex CLI command failed with code ${exitCode}.`,
+            });
+          }
+        });
+
+        yield* runCodexCommand().pipe(
+          Effect.timeoutOption(CODEX_TIMEOUT_MS),
+          Effect.flatMap(
+            Option.match({
+              onNone: () =>
+                Effect.fail(
+                  new TextGenerationError({ operation, detail: "Codex CLI request timed out." }),
+                ),
+              onSome: () => Effect.void,
+            }),
           ),
         );
 
-      const [stdout, stderr, exitCode] = yield* Effect.all(
-        [
-          readStreamAsString(operation, child.stdout),
-          readStreamAsString(operation, child.stderr),
-          child.exitCode.pipe(
-            Effect.mapError((cause) =>
-              normalizeCliError("codex", operation, cause, "Failed to read Codex CLI exit code"),
+        const decodeOutput = Schema.decodeEffect(Schema.fromJsonString(outputSchemaJson));
+
+        return yield* fileSystem.readFileString(outputPath).pipe(
+          Effect.mapError(
+            (cause) =>
+              new TextGenerationError({
+                operation,
+                detail: "Failed to read Codex output file.",
+                cause,
+              }),
+          ),
+          Effect.flatMap(decodeOutput),
+          Effect.catchTag("SchemaError", (cause) =>
+            Effect.fail(
+              new TextGenerationError({
+                operation,
+                detail: "Codex returned invalid structured output.",
+                cause,
+              }),
             ),
           ),
-        ],
-        { concurrency: "unbounded" },
-      );
-
-      if (exitCode !== 0) {
-        const stderrDetail = stderr.trim();
-        const stdoutDetail = stdout.trim();
-        const detail = stderrDetail.length > 0 ? stderrDetail : stdoutDetail;
-        return yield* new TextGenerationError({
-          operation,
-          detail:
-            detail.length > 0
-              ? `Codex CLI command failed: ${detail}`
-              : `Codex CLI command failed with code ${exitCode}.`,
-        });
-      }
-    });
-
-    const cleanup = Effect.all(
-      [schemaPath, outputPath, ...cleanupPaths].map((filePath) => safeUnlink(filePath)),
-      {
-        concurrency: "unbounded",
-      },
-    ).pipe(Effect.asVoid);
-
-    return yield* Effect.gen(function* () {
-      yield* runCodexCommand().pipe(
-        Effect.scoped,
-        Effect.timeoutOption(CODEX_TIMEOUT_MS),
-        Effect.flatMap(
-          Option.match({
-            onNone: () =>
-              Effect.fail(
-                new TextGenerationError({ operation, detail: "Codex CLI request timed out." }),
-              ),
-            onSome: () => Effect.void,
-          }),
-        ),
-      );
-
-      const decodeOutput = Schema.decodeEffect(Schema.fromJsonString(outputSchemaJson));
-
-      return yield* fileSystem.readFileString(outputPath).pipe(
-        Effect.mapError(
-          (cause) =>
-            new TextGenerationError({
-              operation,
-              detail: "Failed to read Codex output file.",
-              cause,
-            }),
-        ),
-        Effect.flatMap(decodeOutput),
-        Effect.catchTag("SchemaError", (cause) =>
-          Effect.fail(
-            new TextGenerationError({
-              operation,
-              detail: "Codex returned invalid structured output.",
-              cause,
-            }),
+          Effect.ensuring(
+            Effect.all(
+              cleanupPaths.map((filePath) => safeUnlink(filePath)),
+              {
+                concurrency: "unbounded",
+              },
+            ).pipe(Effect.asVoid),
           ),
-        ),
-      );
-    }).pipe(Effect.ensuring(cleanup));
+        );
+      }),
+    );
   });
 
   const generateCommitMessage: TextGenerationShape["generateCommitMessage"] = Effect.fn(
