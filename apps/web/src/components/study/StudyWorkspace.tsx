@@ -1109,6 +1109,16 @@ function TopicTheoryReview({ topicModule }: { readonly topicModule: StudyTopicMo
           </div>
         </section>
       ) : null}
+      {review.highYieldSkills.length > 0 ? (
+        <section>
+          <h3 className="text-xs font-medium text-muted-foreground">High-yield skills</h3>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed">
+            {review.highYieldSkills.map((skill) => (
+              <li key={skill}>{skill}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       {review.questionPatterns.length > 0 ? (
         <section>
           <h3 className="text-xs font-medium text-muted-foreground">
@@ -1119,6 +1129,27 @@ function TopicTheoryReview({ topicModule }: { readonly topicModule: StudyTopicMo
               <li key={pattern}>{pattern}</li>
             ))}
           </ul>
+        </section>
+      ) : null}
+      {review.practiceDrills.length > 0 ? (
+        <section>
+          <h3 className="text-xs font-medium text-muted-foreground">Quiz-style drills</h3>
+          <div className="mt-2 space-y-2">
+            {review.practiceDrills.map((drill) => (
+              <article
+                className="rounded-lg border border-border bg-background/60 px-3 py-3"
+                key={`${drill.title}-${drill.sourceAnchors.join(",")}`}
+              >
+                <div className="text-sm font-semibold">{drill.title}</div>
+                {drill.sourceAnchors.length > 0 ? (
+                  <div className="mt-1 text-[11px] text-muted-foreground">
+                    Based on {drill.sourceAnchors.join(", ")}
+                  </div>
+                ) : null}
+                <StudyMarkdown className="mt-2" content={drill.promptMarkdown} />
+              </article>
+            ))}
+          </div>
         </section>
       ) : null}
       {review.solveFlow.length > 0 ? (
@@ -1137,6 +1168,12 @@ function TopicTheoryReview({ topicModule }: { readonly topicModule: StudyTopicMo
           </ol>
         </section>
       ) : null}
+      {review.commonTrapsMarkdown.trim().length > 0 ? (
+        <section>
+          <h3 className="text-xs font-medium text-muted-foreground">Common traps</h3>
+          <StudyMarkdown className="mt-2" content={review.commonTrapsMarkdown} />
+        </section>
+      ) : null}
     </section>
   );
 }
@@ -1146,11 +1183,14 @@ function getTopicReviewSections(topicModule: StudyTopicModule) {
     briefExplanationMarkdown: topicModule.theorySummaryMarkdown,
     definitionsAndFormulasMarkdown: topicModule.formulaSheetMarkdown,
     recurringQuestionTypes: getTopicModuleSubtypes(topicModule.subtypeCoverageJson),
+    highYieldSkills: getTopicModuleStringArray(topicModule.subtypeCoverageJson, "highYieldSkills"),
     questionPatterns: getTopicModuleStringArray(
       topicModule.subtypeCoverageJson,
       "questionPatterns",
     ),
+    practiceDrills: getTopicModulePracticeDrills(topicModule.subtypeCoverageJson),
     solveFlow: getTopicModuleStringArray(topicModule.subtypeCoverageJson, "studyFlow"),
+    commonTrapsMarkdown: topicModule.commonTrapsMarkdown,
   };
 }
 
@@ -1166,7 +1206,14 @@ function getTopicModuleSubtypes(subtypeCoverageJson: unknown): string[] {
   if (Array.isArray(subtypes)) {
     return subtypes.filter((subtype): subtype is string => typeof subtype === "string");
   }
-  const ignoredKeys = new Set(["subtypes", "counts", "questionPatterns", "studyFlow"]);
+  const ignoredKeys = new Set([
+    "subtypes",
+    "counts",
+    "highYieldSkills",
+    "questionPatterns",
+    "practiceDrills",
+    "studyFlow",
+  ]);
   return Object.keys(subtypeCoverageJson).filter((key) => !ignoredKeys.has(key));
 }
 
@@ -1175,6 +1222,32 @@ function getTopicModuleStringArray(subtypeCoverageJson: unknown, key: string): s
   const value = (subtypeCoverageJson as Record<string, unknown>)[key];
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+interface TopicPracticeDrill {
+  readonly title: string;
+  readonly sourceAnchors: readonly string[];
+  readonly promptMarkdown: string;
+}
+
+function getTopicModulePracticeDrills(subtypeCoverageJson: unknown): TopicPracticeDrill[] {
+  if (typeof subtypeCoverageJson !== "object" || subtypeCoverageJson === null) return [];
+  const value = (subtypeCoverageJson as Record<string, unknown>).practiceDrills;
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item): TopicPracticeDrill[] => {
+    if (typeof item !== "object" || item === null) return [];
+    const record = item as Record<string, unknown>;
+    const title = typeof record.title === "string" ? record.title.trim() : "";
+    const promptMarkdown =
+      typeof record.promptMarkdown === "string" ? record.promptMarkdown.trim() : "";
+    const sourceAnchors = Array.isArray(record.sourceAnchors)
+      ? record.sourceAnchors.filter(
+          (sourceAnchor): sourceAnchor is string =>
+            typeof sourceAnchor === "string" && sourceAnchor.trim().length > 0,
+        )
+      : [];
+    return title && promptMarkdown ? [{ title, sourceAnchors, promptMarkdown }] : [];
+  });
 }
 
 function TopicQueuePanel({

@@ -478,4 +478,120 @@ describe("StudySidebar", () => {
       .element(dialog.getByRole("button", { name: "Process course", exact: true }))
       .toBeEnabled();
   });
+
+  it("releases processing actions as soon as a course job succeeds", async () => {
+    const completedAt = "2026-06-01T02:51:33.837Z";
+    const runningJob = {
+      id: "study-job-visible",
+      projectId: "signal-data-analysis",
+      sourceRoot: "G:\\My Drive\\Bar-Ilan\\Signal and Data Analysis\\Quiz\\2024",
+      status: "running",
+      stage: "classify_sources",
+      progressCurrent: 4,
+      progressTotal: 11,
+      message: "Classifying sources in batches of up to 50 documents.",
+      error: null,
+      createdAt: completedAt,
+      updatedAt: completedAt,
+      completedAt: null,
+    };
+    const succeededJob = {
+      ...runningJob,
+      status: "succeeded",
+      stage: "completed",
+      progressCurrent: 11,
+      message: "Course processing completed.",
+      updatedAt: completedAt,
+      completedAt,
+    };
+    const snapshotResolver: { current: ((response: Response) => void) | null } = {
+      current: null,
+    };
+    const snapshotResponse = new Promise<Response>((resolve) => {
+      snapshotResolver.current = resolve;
+    });
+    vi.spyOn(window, "fetch").mockImplementation((input, init) => {
+      const url = String(input);
+      if (url.includes("/api/studyframe/process-folder")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ job: runningJob }), {
+            status: 202,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      if (url.includes("/api/studyframe/processing-jobs/study-job-visible/events")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              events: [
+                {
+                  id: "event-completed",
+                  jobId: "study-job-visible",
+                  stage: "completed",
+                  level: "info",
+                  message: "Course processing completed.",
+                  metadataJson: null,
+                  createdAt: completedAt,
+                },
+              ],
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+        );
+      }
+      if (url.includes("/api/studyframe/processing-jobs/study-job-visible")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ job: succeededJob }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      if (url.includes("/api/studyframe/snapshot") && init?.method !== "PUT") {
+        return snapshotResponse;
+      }
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    });
+
+    await renderSidebar();
+    await page.getByRole("button", { name: "Import course", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Import course" });
+    await dialog.getByRole("button", { name: "Source material options", exact: true }).click();
+    await dialog
+      .getByRole("textbox")
+      .first()
+      .fill("G:\\My Drive\\Bar-Ilan\\Signal and Data Analysis\\Quiz\\2024");
+    await dialog.getByRole("button", { name: "Open path", exact: true }).click();
+    await dialog.getByRole("button", { name: "Process course", exact: true }).click();
+
+    await expect
+      .element(dialog.getByText("Course processing completed.", { exact: true }).first())
+      .toBeInTheDocument();
+    await expect.element(dialog.getByText("succeeded", { exact: true })).toBeInTheDocument();
+    await expect
+      .element(dialog.getByRole("button", { name: "Done", exact: true }))
+      .toBeInTheDocument();
+    await expect
+      .element(dialog.getByRole("button", { name: "Processing", exact: true }))
+      .not.toBeInTheDocument();
+
+    const resolveSnapshot = snapshotResolver.current;
+    if (!resolveSnapshot) {
+      throw new Error("Snapshot resolver was not initialized.");
+    }
+    resolveSnapshot(
+      new Response(
+        JSON.stringify({
+          snapshot: {
+            dataset: studySeedData,
+            attempts: [],
+            completionSummaries: [],
+            generatedQuestionBatches: [],
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+  });
 });

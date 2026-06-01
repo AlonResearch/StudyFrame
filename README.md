@@ -57,12 +57,15 @@ between the topic's questions and can provide:
 
 1. **Brief explanation:** quick theory that explains what the topic is about and what the main quantities mean.
 2. **Definitions:** named quantities, formula forms (if any), units, and interpretation rules.
-3. Recurring question types seen in real quizzes.
-4. A solve flow for approaching the topic's flashcards.
+3. High-yield skills and recurring question types seen in real quizzes.
+4. Representative unsolved quiz-style drills that match the source material.
+5. A solve flow for approaching the topic's flashcards.
+6. Generic common traps for the topic.
 
-Question-specific watch-outs are answer-derived support. They should appear only after the student
-submits or reveals the real answer, and should be shown as the relevant "watch for this question"
-list.
+Generic topic traps may be visible in the concept refresher. Question-specific worked solutions,
+rubrics, final numeric answers, and watch-outs are answer-derived support. They should appear only
+after the student submits or reveals the real answer, and should be shown as the relevant "watch for
+this question" list.
 
 A contextual extra-information drawer, opened from the topic card menu only when needed, should
 provide subtopics, progress, a queue of real past questions, and spoiler-safe question details.

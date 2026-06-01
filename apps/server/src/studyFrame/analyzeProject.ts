@@ -650,7 +650,7 @@ function makeTopicModules(projectId: string, topics: readonly TopicAnalysis[]): 
     topicClusterId: clusterId(topic.definition),
     theorySummaryMarkdown: topic.definition.theory,
     formulaSheetMarkdown: topic.definition.formulas,
-    commonTrapsMarkdown: "",
+    commonTrapsMarkdown: topic.definition.traps.map((trap) => `- ${trap}`).join("\n"),
     subtypeCoverageJson: {
       subtypes: unique(topic.candidates.map(({ subtype }) => subtype)),
       counts: Object.fromEntries(
@@ -659,6 +659,7 @@ function makeTopicModules(projectId: string, topics: readonly TopicAnalysis[]): 
           topic.candidates.filter((candidate) => candidate.subtype === subtype).length,
         ]),
       ),
+      highYieldSkills: topic.definition.questionPatterns ?? [],
       questionPatterns: topic.definition.questionPatterns ?? [],
       studyFlow: topic.definition.studyFlow ?? [],
     },

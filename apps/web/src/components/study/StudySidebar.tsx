@@ -510,6 +510,12 @@ function StudyImportDialog({
   useEffect(() => {
     if (!processingJob || !["queued", "running"].includes(processingJob.status)) return;
     let cancelled = false;
+    let timer: number | undefined;
+    const stopPolling = () => {
+      if (timer === undefined) return;
+      window.clearInterval(timer);
+      timer = undefined;
+    };
     const poll = () => {
       void Promise.all([
         getStudyProcessingJob(processingJob.id),
@@ -523,14 +529,19 @@ function StudyImportDialog({
           setProcessingJob(nextJob);
           setFolderImportSummary(nextJob.message);
           if (nextJob.status === "succeeded") {
+            stopPolling();
+            setImportingFolder(false);
+            setImportedProjectId(nextJob.projectId ?? projectId);
+            setSourceRoot("");
             const snapshotResponse = await loadStudyFrameSnapshot();
+            if (cancelled) return;
             if (snapshotResponse.snapshot) {
               onFolderImported(snapshotResponse.snapshot.dataset);
-              setImportedProjectId(nextJob.projectId);
+            } else {
+              setError("Course processing completed, but the refreshed snapshot was empty.");
             }
-            setImportingFolder(false);
-            setSourceRoot("");
           } else if (nextJob.status === "failed" || nextJob.status === "cancelled") {
+            stopPolling();
             setImportingFolder(false);
             if (nextJob.status === "failed") {
               setError(nextJob.error ?? nextJob.message);
@@ -539,17 +550,18 @@ function StudyImportDialog({
         })
         .catch((cause) => {
           if (cancelled) return;
+          stopPolling();
           setImportingFolder(false);
           setError(cause instanceof Error ? cause.message : "Could not poll processing progress.");
         });
     };
-    const timer = window.setInterval(poll, 1_000);
+    timer = window.setInterval(poll, 1_000);
     poll();
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      stopPolling();
     };
-  }, [onFolderImported, processingJob]);
+  }, [onFolderImported, processingJob, projectId]);
 
   const handleOpenFolder = () => {
     if (importingFolder) return;

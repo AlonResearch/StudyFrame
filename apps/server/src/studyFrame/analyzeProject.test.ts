@@ -220,7 +220,7 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
       );
       assert.equal(
         analyzed.snapshot.dataset.topicModules?.[0]?.generationMetadataJson?.promptVersion,
-        "studyframe-analysis-v1",
+        "studyframe-analysis-v2",
       );
       assert.include(
         analyzed.snapshot.dataset.projects[0]?.extractionWarnings ?? [],
@@ -229,6 +229,125 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
       assert.isDefined(
         analyzed.snapshot.dataset.topicModules?.[0]?.generationMetadataJson?.rawStructuredResult,
       );
+    }),
+  );
+
+  it.effect("generates each topic guide once from all classified topic questions", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({
+        prefix: "studyframe-analysis-topic-guide-",
+      });
+      yield* fs.writeFileString(
+        path.join(root, "quiz-2024.md"),
+        Array.from({ length: 13 }, (_, index) =>
+          [
+            `Question ${index + 1} (1 point)`,
+            `Compute the firing rate and Fano factor for spike train ${index + 1}.`,
+          ].join("\n"),
+        ).join("\n\n"),
+      );
+
+      const imported = yield* importFolderToSnapshot({ sourceRoot: root });
+      const topicGuideQuestionCounts: number[] = [];
+      const supportBatchSizes: number[] = [];
+      const analyzed = yield* analyzeProjectWithProvider(imported.snapshot, {
+        projectId: imported.result.projectId,
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            ServerSettingsService.layerTest(),
+            Layer.succeed(
+              TextGeneration,
+              makeTextGeneration(((input) => {
+                const payload = JSON.parse(
+                  input.prompt.slice(input.prompt.lastIndexOf("\n\n") + 2),
+                ) as {
+                  readonly sourceDocuments?: readonly { readonly id: string }[];
+                  readonly questions?: readonly { readonly id: string }[];
+                  readonly topicRequests?: readonly {
+                    readonly realQuestions: readonly { readonly id: string }[];
+                  }[];
+                };
+                if (input.prompt.includes("You are classifying")) {
+                  return Effect.succeed({
+                    sourceRoles:
+                      payload.sourceDocuments?.map((document) => ({
+                        documentId: document.id,
+                        role: "quiz" as const,
+                        confidence: 0.99,
+                        warnings: [],
+                      })) ?? [],
+                    questionClassifications:
+                      payload.questions?.map((question) => ({
+                        questionId: question.id,
+                        topicClusterId: "cluster-spike-train-statistics",
+                        subtype: "Fano factor",
+                        confidence: 0.98,
+                      })) ?? [],
+                  });
+                }
+                if (input.prompt.includes("app-native topic study guides")) {
+                  topicGuideQuestionCounts.push(
+                    payload.topicRequests?.[0]?.realQuestions.length ?? 0,
+                  );
+                  return Effect.succeed({
+                    topicModules: [
+                      {
+                        topicClusterId: "cluster-spike-train-statistics",
+                        priorityRationale:
+                          "All supplied spike-train questions make this top priority.",
+                        theorySummaryMarkdown:
+                          "## Brief Explanation\n\nSpike-train statistics review.",
+                        formulaSheetMarkdown: "- $FF = Var[N] / E[N]$",
+                        commonTrapsMarkdown: "- Do not use CV on spike counts.",
+                        subtopics: ["Fano factor"],
+                        highYieldSkills: ["Separate count variability from interval variability."],
+                        questionPatterns: ["Compute FF from repeated windows."],
+                        studyFlow: [
+                          "Identify counts.",
+                          "Compute mean and variance.",
+                          "Interpret FF.",
+                        ],
+                        practiceDrills: [
+                          {
+                            title: "Fano factor drill",
+                            sourceAnchors: ["quiz-2024.md#question=1"],
+                            promptMarkdown: "Compute FF for counts `[1, 2, 3]` without using CV.",
+                          },
+                        ],
+                      },
+                    ],
+                  });
+                }
+                supportBatchSizes.push(payload.questions?.length ?? 0);
+                return Effect.succeed({
+                  questionSupport: [],
+                  practiceItems: [],
+                });
+              }) as TextGenerationShape["generateStructured"]),
+            ),
+          ),
+        ),
+      );
+
+      assert.deepEqual(topicGuideQuestionCounts, [13]);
+      assert.deepEqual(supportBatchSizes, [12, 1]);
+      const module = analyzed.snapshot.dataset.topicModules?.find(
+        (candidate) => candidate.topicClusterId === "cluster-spike-train-statistics",
+      );
+      const coverage = module?.subtypeCoverageJson as
+        | {
+            readonly highYieldSkills?: readonly string[];
+            readonly practiceDrills?: readonly { readonly title: string }[];
+          }
+        | undefined;
+      assert.include(module?.commonTrapsMarkdown ?? "", "Do not use CV");
+      assert.deepEqual(coverage?.highYieldSkills, [
+        "Separate count variability from interval variability.",
+      ]);
+      assert.equal(coverage?.practiceDrills?.[0]?.title, "Fano factor drill");
     }),
   );
 

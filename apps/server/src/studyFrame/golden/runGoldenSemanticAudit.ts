@@ -284,6 +284,7 @@ function compactTopicModule(module: StudyTopicModule) {
     topicClusterId: module.topicClusterId,
     theorySummaryMarkdown: clipAuditText(module.theorySummaryMarkdown),
     formulaSheetMarkdown: clipAuditText(module.formulaSheetMarkdown),
+    commonTrapsMarkdown: clipAuditText(module.commonTrapsMarkdown),
     subtypeCoverageJson: module.subtypeCoverageJson,
   };
 }

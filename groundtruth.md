@@ -128,11 +128,11 @@ course details or markdown reports in the shared right-side overlay sheet. Topic
 reading sheet: a compact topic header, brief explanation, workflow progress, and the active question
 remain in one surface while questions switch in place. The topic review renders the StudyFrame topic
 module as a manual-study equivalent with optional agent-fillable sections: brief explanation,
-definitions and formulas, recurring question types, and solve flow. Empty optional sections are
-skipped so topics without formulas do not show placeholder UI. Question-specific common mistakes
-are treated as answer-derived support and render only after submit or reveal as the relevant
-`Watch for this question` list. StudyFrame does not render a topic-level trap bank. The topic card
-header exposes its own
+definitions and formulas, high-yield skills, recurring question types, representative unsolved
+quiz-style drills, solve flow, and generic topic traps. Empty optional sections are skipped so
+topics without formulas do not show placeholder UI. Question-specific common mistakes are treated
+as answer-derived support and render only after submit or reveal as the relevant
+`Watch for this question` list. The topic card header exposes its own
 three-dots `Question details` menu for the real-question queue or spoiler-safe question details.
 Those details include question-scoped source provenance, extraction status, source security
 findings, classification, warnings, and linked assets. Prompt-injection-like source instructions are
@@ -280,6 +280,19 @@ Feedback behavior:
 | Direction check | Local non-answer feedback        | Provider response replaces it when available; answer-bearing phrases are redacted |
 | Submit          | Local rubric keyword grading     | Provider grading replaces the matching attempt when available                     |
 | Reveal          | Local tracked `revealed` attempt | None                                                                              |
+
+The provider workflow separates topic-guide generation from question-support generation. After
+source and question classification, StudyFrame generates topic modules in bounded topic batches;
+each module uses all real questions classified into that topic. It then generates
+spoiler-controlled per-question support in bounded question batches. This prevents a topic guide
+from being derived from only the first question batch for that topic while avoiding one provider
+call per topic.
+
+Topic modules target the same study value as the golden markdown examples while remaining
+app-native and spoiler-safe before practice: brief explanation, definitions/formulas, subtopics,
+high-yield skills, recurring question patterns, representative unsolved quiz-style drills, solve
+flow, and generic common traps. Final numeric answers, rubrics, worked solutions, and
+question-specific watch-outs stay in question support and render only after submit or reveal.
 
 The topic practice footer exposes one progressive help action: direction check, then hint, then
 show answer. The latest assistance message replaces the prior assistance message instead of

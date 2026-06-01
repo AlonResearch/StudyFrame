@@ -178,9 +178,10 @@ function deriveTopicModules(
       topicClusterId: cluster?.id ?? topicClusterId(thread.id),
       theorySummaryMarkdown: review.theorySummaryMarkdown,
       formulaSheetMarkdown: review.formulaSheetMarkdown,
-      commonTrapsMarkdown: "",
+      commonTrapsMarkdown: review.commonTrapsMarkdown,
       subtypeCoverageJson: {
         subtypes: cluster?.subtypes ?? review.subtypes,
+        highYieldSkills: review.highYieldSkills,
         questionPatterns: review.questionPatterns,
         studyFlow: review.studyFlow,
       },
@@ -196,8 +197,10 @@ function getDefaultTopicReview(
   readonly theorySummaryMarkdown: string;
   readonly formulaSheetMarkdown: string;
   readonly subtypes: readonly string[];
+  readonly highYieldSkills: readonly string[];
   readonly questionPatterns: readonly string[];
   readonly studyFlow: readonly string[];
+  readonly commonTrapsMarkdown: string;
 } {
   const normalized = displayName.toLowerCase();
   if (normalized.includes("spike-train")) {
@@ -226,6 +229,11 @@ function getDefaultTopicReview(
         "Inter-spike intervals",
         "Hazard and refractory logic",
       ],
+      highYieldSkills: [
+        "Choose the statistic from the data type: counts, intervals, or hazard.",
+        "Convert milliseconds to seconds before reporting Hz.",
+        "Compare CV and FF with the Poisson benchmark without treating either as proof.",
+      ],
       questionPatterns: [
         "Given spike counts across trials or windows, compute rate, variance, and Fano factor.",
         "Given ISIs, compute mean interval, CV, and regularity relative to Poisson.",
@@ -237,6 +245,11 @@ function getDefaultTopicReview(
         "Compute the requested statistic.",
         "Compare with the Poisson benchmark and state the interpretation.",
       ],
+      commonTrapsMarkdown: [
+        "- Converting milliseconds incorrectly before computing Hz.",
+        "- Using CV on spike counts or FF on ISIs.",
+        "- Claiming a train is Poisson from `CV = 1` or `FF = 1` alone.",
+      ].join("\n"),
     };
   }
 
@@ -266,6 +279,11 @@ function getDefaultTopicReview(
         "Mutual information",
         "Spike-pattern entropy",
       ],
+      highYieldSkills: [
+        "Build the full probability table before computing entropy.",
+        "Compute marginals explicitly before using joint or conditional identities.",
+        "Explain each number as uncertainty or uncertainty reduction.",
+      ],
       questionPatterns: [
         "Given a probability table, compute entropy, joint entropy, conditional entropy, and mutual information.",
         "Given neural responses and stimuli, estimate entropy and information from empirical distributions.",
@@ -277,6 +295,11 @@ function getDefaultTopicReview(
         "Choose the entropy identity that matches the question.",
         "Compute in bits and explain the interpretation.",
       ],
+      commonTrapsMarkdown: [
+        "- Using natural logs when the answer should be in bits.",
+        "- Replacing joint probabilities with marginals.",
+        "- Forgetting that conditional entropy and mutual information cannot be negative.",
+      ].join("\n"),
     };
   }
 
@@ -284,8 +307,10 @@ function getDefaultTopicReview(
     theorySummaryMarkdown: summary,
     formulaSheetMarkdown: "",
     subtypes: [],
+    highYieldSkills: [],
     questionPatterns: [],
     studyFlow: [],
+    commonTrapsMarkdown: "",
   };
 }
 
