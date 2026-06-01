@@ -3,6 +3,8 @@ import type {
   StudyCompletionSummary,
   StudyFrameSnapshot,
   StudyGeneratedQuestionBatch,
+  StudyProcessingEvent,
+  StudyProcessingJob,
   StudyPracticeItem,
   StudyPracticeSupport,
   StudyProject,
@@ -12,7 +14,9 @@ import type {
   StudyQuestionSupport,
   StudyQuestionTopic,
   StudySourceAsset,
+  StudySourceChunk,
   StudySourceDocument,
+  StudySourceSecurityFinding,
   StudyTopicCluster,
   StudyTopicModule,
   StudyTopicThread,
@@ -64,6 +68,35 @@ type StudySourceAssetRow = {
   readonly contentJson: string;
   readonly localUri: string | null;
   readonly extractionConfidence: number;
+};
+
+type StudySourceChunkRow = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly documentId: string;
+  readonly sourceAnchor: string;
+  readonly chunkIndex: number;
+  readonly text: string;
+  readonly sanitizedText: string;
+  readonly tokenEstimate: number;
+  readonly securityFindingIds: string;
+};
+
+type StudySourceSecurityFindingRow = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly documentId: string;
+  readonly questionCandidateId: string | null;
+  readonly assetId: string | null;
+  readonly sourceAnchor: string;
+  readonly kind: StudySourceSecurityFinding["kind"];
+  readonly severity: StudySourceSecurityFinding["severity"];
+  readonly confidence: number;
+  readonly instructionText: string;
+  readonly normalizedIntent: string;
+  readonly action: StudySourceSecurityFinding["action"];
+  readonly detectionMethod: StudySourceSecurityFinding["detectionMethod"];
+  readonly createdAt: string;
 };
 
 type StudyQuestionCandidateRow = {
@@ -238,6 +271,31 @@ type StudyGeneratedQuestionBatchRow = {
   readonly generationMetadataJson: string;
 };
 
+type StudyProcessingJobRow = {
+  readonly id: string;
+  readonly projectId: string | null;
+  readonly sourceRoot: string;
+  readonly status: StudyProcessingJob["status"];
+  readonly stage: StudyProcessingJob["stage"];
+  readonly progressCurrent: number;
+  readonly progressTotal: number;
+  readonly message: string;
+  readonly error: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly completedAt: string | null;
+};
+
+type StudyProcessingEventRow = {
+  readonly id: string;
+  readonly jobId: string;
+  readonly stage: StudyProcessingEvent["stage"];
+  readonly level: StudyProcessingEvent["level"];
+  readonly message: string;
+  readonly metadataJson: string;
+  readonly createdAt: string;
+};
+
 const parseJson = <T>(value: string | null, fallback: T): T => {
   if (!value) return fallback;
   const parsed = decodeJsonString(value);
@@ -253,6 +311,35 @@ function toBoolean(value: number): boolean {
 
 function fromBoolean(value: boolean): number {
   return value ? 1 : 0;
+}
+
+function processingJobFromRow(row: StudyProcessingJobRow): StudyProcessingJob {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    sourceRoot: row.sourceRoot,
+    status: row.status,
+    stage: row.stage,
+    progressCurrent: row.progressCurrent,
+    progressTotal: row.progressTotal,
+    message: row.message,
+    error: row.error,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    completedAt: row.completedAt,
+  };
+}
+
+function processingEventFromRow(row: StudyProcessingEventRow): StudyProcessingEvent {
+  return {
+    id: row.id,
+    jobId: row.jobId,
+    stage: row.stage,
+    level: row.level,
+    message: row.message,
+    metadataJson: parseJson(row.metadataJson, null as unknown),
+    createdAt: row.createdAt,
+  };
 }
 
 const makeStudyFrameRepository = Effect.gen(function* () {
@@ -312,6 +399,39 @@ const makeStudyFrameRepository = Effect.gen(function* () {
           extraction_confidence AS "extractionConfidence"
         FROM study_source_assets
         ORDER BY document_id ASC, source_anchor ASC, id ASC
+      `;
+      const sourceChunkRows = yield* sql<StudySourceChunkRow>`
+        SELECT
+          id AS "id",
+          project_id AS "projectId",
+          document_id AS "documentId",
+          source_anchor AS "sourceAnchor",
+          chunk_index AS "chunkIndex",
+          text AS "text",
+          sanitized_text AS "sanitizedText",
+          token_estimate AS "tokenEstimate",
+          security_finding_ids_json AS "securityFindingIds"
+        FROM study_source_chunks
+        ORDER BY document_id ASC, chunk_index ASC, id ASC
+      `;
+      const sourceSecurityFindingRows = yield* sql<StudySourceSecurityFindingRow>`
+        SELECT
+          id AS "id",
+          project_id AS "projectId",
+          document_id AS "documentId",
+          question_candidate_id AS "questionCandidateId",
+          asset_id AS "assetId",
+          source_anchor AS "sourceAnchor",
+          kind AS "kind",
+          severity AS "severity",
+          confidence AS "confidence",
+          instruction_text AS "instructionText",
+          normalized_intent AS "normalizedIntent",
+          action AS "action",
+          detection_method AS "detectionMethod",
+          created_at AS "createdAt"
+        FROM study_source_security_findings
+        ORDER BY document_id ASC, severity DESC, source_anchor ASC, id ASC
       `;
       const questionCandidateRows = yield* sql<StudyQuestionCandidateRow>`
         SELECT
@@ -549,6 +669,45 @@ const makeStudyFrameRepository = Effect.gen(function* () {
               extractionConfidence: row.extractionConfidence,
             }),
           ),
+          ...(sourceChunkRows.length > 0
+            ? {
+                sourceChunks: sourceChunkRows.map(
+                  (row): StudySourceChunk => ({
+                    id: row.id,
+                    projectId: row.projectId,
+                    documentId: row.documentId,
+                    sourceAnchor: row.sourceAnchor,
+                    chunkIndex: row.chunkIndex,
+                    text: row.text,
+                    sanitizedText: row.sanitizedText,
+                    tokenEstimate: row.tokenEstimate,
+                    securityFindingIds: parseJson(row.securityFindingIds, [] as string[]),
+                  }),
+                ),
+              }
+            : {}),
+          ...(sourceSecurityFindingRows.length > 0
+            ? {
+                sourceSecurityFindings: sourceSecurityFindingRows.map(
+                  (row): StudySourceSecurityFinding => ({
+                    id: row.id,
+                    projectId: row.projectId,
+                    documentId: row.documentId,
+                    questionCandidateId: row.questionCandidateId,
+                    assetId: row.assetId,
+                    sourceAnchor: row.sourceAnchor,
+                    kind: row.kind,
+                    severity: row.severity,
+                    confidence: row.confidence,
+                    instructionText: row.instructionText,
+                    normalizedIntent: row.normalizedIntent,
+                    action: row.action,
+                    detectionMethod: row.detectionMethod,
+                    createdAt: row.createdAt,
+                  }),
+                ),
+              }
+            : {}),
           questionCandidates: questionCandidateRows.map(
             (row): StudyQuestionCandidate => ({
               id: row.id,
@@ -768,6 +927,8 @@ const makeStudyFrameRepository = Effect.gen(function* () {
           yield* sql`DELETE FROM study_topic_modules`;
           yield* sql`DELETE FROM study_question_classifications`;
           yield* sql`DELETE FROM study_topic_clusters`;
+          yield* sql`DELETE FROM study_source_security_findings`;
+          yield* sql`DELETE FROM study_source_chunks`;
           yield* sql`DELETE FROM study_question_candidates`;
           yield* sql`DELETE FROM study_source_assets`;
           yield* sql`DELETE FROM study_source_documents`;
@@ -870,6 +1031,33 @@ const makeStudyFrameRepository = Effect.gen(function* () {
             `;
           }
 
+          for (const chunk of snapshot.dataset.sourceChunks ?? []) {
+            yield* sql`
+              INSERT INTO study_source_chunks (
+                id,
+                project_id,
+                document_id,
+                source_anchor,
+                chunk_index,
+                text,
+                sanitized_text,
+                token_estimate,
+                security_finding_ids_json
+              )
+              VALUES (
+                ${chunk.id},
+                ${chunk.projectId},
+                ${chunk.documentId},
+                ${chunk.sourceAnchor},
+                ${chunk.chunkIndex},
+                ${chunk.text},
+                ${chunk.sanitizedText},
+                ${chunk.tokenEstimate},
+                ${toJson(chunk.securityFindingIds)}
+              )
+            `;
+          }
+
           for (const candidate of snapshot.dataset.questionCandidates ?? []) {
             yield* sql`
               INSERT INTO study_question_candidates (
@@ -897,6 +1085,43 @@ const makeStudyFrameRepository = Effect.gen(function* () {
                 ${toJson(candidate.assetIds)},
                 ${candidate.extractionConfidence},
                 ${fromBoolean(candidate.needsManualReview)}
+              )
+            `;
+          }
+
+          for (const finding of snapshot.dataset.sourceSecurityFindings ?? []) {
+            yield* sql`
+              INSERT INTO study_source_security_findings (
+                id,
+                project_id,
+                document_id,
+                question_candidate_id,
+                asset_id,
+                source_anchor,
+                kind,
+                severity,
+                confidence,
+                instruction_text,
+                normalized_intent,
+                action,
+                detection_method,
+                created_at
+              )
+              VALUES (
+                ${finding.id},
+                ${finding.projectId},
+                ${finding.documentId},
+                ${finding.questionCandidateId},
+                ${finding.assetId},
+                ${finding.sourceAnchor},
+                ${finding.kind},
+                ${finding.severity},
+                ${finding.confidence},
+                ${finding.instructionText},
+                ${finding.normalizedIntent},
+                ${finding.action},
+                ${finding.detectionMethod},
+                ${finding.createdAt}
               )
             `;
           }
@@ -1258,9 +1483,151 @@ const makeStudyFrameRepository = Effect.gen(function* () {
         Effect.mapError(toPersistenceSqlError("StudyFrameRepository.saveSnapshot:transaction")),
       );
 
+  const loadProcessingJob: StudyFrameRepositoryShape["loadProcessingJob"] = (jobId) =>
+    Effect.gen(function* () {
+      const rows = yield* sql<StudyProcessingJobRow>`
+        SELECT
+          id AS "id",
+          project_id AS "projectId",
+          source_root AS "sourceRoot",
+          status AS "status",
+          stage AS "stage",
+          progress_current AS "progressCurrent",
+          progress_total AS "progressTotal",
+          message AS "message",
+          error AS "error",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt",
+          completed_at AS "completedAt"
+        FROM study_processing_jobs
+        WHERE id = ${jobId}
+        LIMIT 1
+      `;
+      const row = rows[0];
+      return row ? Option.some(processingJobFromRow(row)) : Option.none();
+    }).pipe(Effect.mapError(toPersistenceSqlError("StudyFrameRepository.loadProcessingJob:query")));
+
+  const saveProcessingJob: StudyFrameRepositoryShape["saveProcessingJob"] = (job) =>
+    sql`
+      INSERT INTO study_processing_jobs (
+        id,
+        project_id,
+        source_root,
+        status,
+        stage,
+        progress_current,
+        progress_total,
+        message,
+        error,
+        created_at,
+        updated_at,
+        completed_at
+      )
+      VALUES (
+        ${job.id},
+        ${job.projectId},
+        ${job.sourceRoot},
+        ${job.status},
+        ${job.stage},
+        ${job.progressCurrent},
+        ${job.progressTotal},
+        ${job.message},
+        ${job.error},
+        ${job.createdAt},
+        ${job.updatedAt},
+        ${job.completedAt}
+      )
+      ON CONFLICT(id) DO UPDATE SET
+        project_id = excluded.project_id,
+        source_root = excluded.source_root,
+        status = excluded.status,
+        stage = excluded.stage,
+        progress_current = excluded.progress_current,
+        progress_total = excluded.progress_total,
+        message = excluded.message,
+        error = excluded.error,
+        updated_at = excluded.updated_at,
+        completed_at = excluded.completed_at
+    `.pipe(Effect.mapError(toPersistenceSqlError("StudyFrameRepository.saveProcessingJob:upsert")));
+
+  const appendProcessingEvent: StudyFrameRepositoryShape["appendProcessingEvent"] = (event) =>
+    sql`
+      INSERT INTO study_processing_events (
+        id,
+        job_id,
+        stage,
+        level,
+        message,
+        metadata_json,
+        created_at
+      )
+      VALUES (
+        ${event.id},
+        ${event.jobId},
+        ${event.stage},
+        ${event.level},
+        ${event.message},
+        ${toJson(event.metadataJson)},
+        ${event.createdAt}
+      )
+    `.pipe(
+      Effect.mapError(toPersistenceSqlError("StudyFrameRepository.appendProcessingEvent:insert")),
+    );
+
+  const listProcessingEvents: StudyFrameRepositoryShape["listProcessingEvents"] = (jobId) =>
+    Effect.gen(function* () {
+      const rows = yield* sql<StudyProcessingEventRow>`
+        SELECT
+          id AS "id",
+          job_id AS "jobId",
+          stage AS "stage",
+          level AS "level",
+          message AS "message",
+          metadata_json AS "metadataJson",
+          created_at AS "createdAt"
+        FROM study_processing_events
+        WHERE job_id = ${jobId}
+        ORDER BY created_at ASC, id ASC
+      `;
+      return rows.map(processingEventFromRow);
+    }).pipe(
+      Effect.mapError(toPersistenceSqlError("StudyFrameRepository.listProcessingEvents:query")),
+    );
+
+  const saveProcessingArtifact: StudyFrameRepositoryShape["saveProcessingArtifact"] = (artifact) =>
+    sql`
+      INSERT INTO study_processing_artifacts (
+        id,
+        job_id,
+        stage,
+        artifact_type,
+        artifact_json,
+        created_at
+      )
+      VALUES (
+        ${artifact.id},
+        ${artifact.jobId},
+        ${artifact.stage},
+        ${artifact.artifactType},
+        ${toJson(artifact.artifactJson)},
+        ${artifact.createdAt}
+      )
+      ON CONFLICT(id) DO UPDATE SET
+        artifact_type = excluded.artifact_type,
+        artifact_json = excluded.artifact_json,
+        created_at = excluded.created_at
+    `.pipe(
+      Effect.mapError(toPersistenceSqlError("StudyFrameRepository.saveProcessingArtifact:upsert")),
+    );
+
   return {
     loadSnapshot,
     saveSnapshot,
+    loadProcessingJob,
+    saveProcessingJob,
+    appendProcessingEvent,
+    listProcessingEvents,
+    saveProcessingArtifact,
   } satisfies StudyFrameRepositoryShape;
 });
 

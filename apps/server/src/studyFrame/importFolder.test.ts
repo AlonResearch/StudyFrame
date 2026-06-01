@@ -235,6 +235,47 @@ it.layer(NodeServices.layer)("importFolderToSnapshot", (it) => {
     }),
   );
 
+  it.effect("separates DOCX list question parts while preserving table grounding", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "studyframe-import-docx-parts-" });
+      yield* fs.writeFile(
+        path.join(root, "quiz-2024.docx"),
+        makeStoredZip([
+          {
+            name: "word/document.xml",
+            content: Buffer.from(
+              [
+                "<w:document><w:body>",
+                "<w:p><w:r><w:t>Data &amp; Signal Analysis Quiz</w:t></w:r></w:p>",
+                '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="7"/></w:numPr></w:pPr><w:r><w:t>The firing rates are supplied in file rates.csv.</w:t></w:r></w:p>',
+                "<w:tbl><w:tr><w:tc><w:p><w:r><w:t>trial</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>spikes</w:t></w:r></w:p></w:tc></w:tr><w:tr><w:tc><w:p><w:r><w:t>1</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>8</w:t></w:r></w:p></w:tc></w:tr></w:tbl>",
+                '<w:p><w:pPr><w:numPr><w:ilvl w:val="1"/><w:numId w:val="7"/></w:numPr></w:pPr><w:r><w:t>Compute the entropy of the firing rates. (20%)</w:t></w:r></w:p>',
+                '<w:p><w:pPr><w:numPr><w:ilvl w:val="1"/><w:numId w:val="7"/></w:numPr></w:pPr><w:r><w:t>Draw the ROC curve and calculate AUC. (30%)</w:t></w:r></w:p>',
+                "</w:body></w:document>",
+              ].join(""),
+            ),
+          },
+        ]),
+      );
+
+      const { snapshot, result } = yield* importFolderToSnapshot({ sourceRoot: root });
+      const candidates = snapshot.dataset.questionCandidates ?? [];
+
+      assert.equal(result.questionCandidateCount, 2);
+      assert.equal(candidates[0]?.sourceAnchor, "quiz-2024.docx#question=1");
+      assert.equal(candidates[1]?.sourceAnchor, "quiz-2024.docx#question=2");
+      assert.include(candidates[0]?.rawPromptMarkdown ?? "", "The firing rates are supplied");
+      assert.include(candidates[0]?.rawPromptMarkdown ?? "", "| trial | spikes |");
+      assert.include(candidates[1]?.rawPromptMarkdown ?? "", "Draw the ROC curve");
+      assert.include(
+        snapshot.dataset.sourceChunks?.map((chunk) => chunk.text).join("\n") ?? "",
+        "| trial | spikes |",
+      );
+    }),
+  );
+
   it.effect("marks questions that reference external context for manual review", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

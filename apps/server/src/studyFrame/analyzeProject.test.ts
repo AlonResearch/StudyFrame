@@ -422,4 +422,80 @@ it.layer(NodeServices.layer)("analyzeProjectSnapshot", (it) => {
       assert.equal(analyzed.snapshot.dataset.topicClusters?.[0]?.recentQuestionParts, 2);
     }),
   );
+
+  it.effect(
+    "classifies more than 50 source documents in bounded batches and repairs omissions",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "studyframe-analysis-batches-" });
+        for (let index = 0; index < 51; index += 1) {
+          yield* fs.writeFileString(
+            path.join(root, `quiz-${String(index).padStart(2, "0")}-2024.md`),
+            `Question 1\nCompute the firing rate for spike train ${index}.`,
+          );
+        }
+
+        const imported = yield* importFolderToSnapshot({ sourceRoot: root });
+        const classificationBatchSizes: number[] = [];
+        const classificationQuestionCounts: number[] = [];
+        const analyzed = yield* analyzeProjectWithProvider(
+          imported.snapshot,
+          {
+            projectId: imported.result.projectId,
+          },
+          { requireProvider: true },
+        ).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              ServerSettingsService.layerTest(),
+              Layer.succeed(
+                TextGeneration,
+                makeTextGeneration(((input) => {
+                  if (!input.prompt.includes("You are classifying")) {
+                    return Effect.succeed({
+                      topicModules: [],
+                      questionSupport: [],
+                      practiceItems: [],
+                    });
+                  }
+                  const payload = JSON.parse(
+                    input.prompt.slice(input.prompt.lastIndexOf("\n\n") + 2),
+                  ) as {
+                    readonly sourceDocuments: readonly { readonly id: string }[];
+                    readonly questions: readonly { readonly id: string }[];
+                  };
+                  classificationBatchSizes.push(payload.sourceDocuments.length);
+                  classificationQuestionCounts.push(payload.questions.length);
+                  return Effect.succeed({
+                    sourceRoles:
+                      classificationBatchSizes.length === 1
+                        ? payload.sourceDocuments.map((document) => ({
+                            documentId: document.id,
+                            role: "quiz" as const,
+                            confidence: 0.99,
+                            warnings: [],
+                          }))
+                        : [],
+                    questionClassifications: [],
+                  });
+                }) as TextGenerationShape["generateStructured"]),
+              ),
+            ),
+          ),
+        );
+
+        assert.deepEqual(classificationBatchSizes, [50, 1]);
+        assert.deepEqual(classificationQuestionCounts, [50, 1]);
+        const repairedDocument = analyzed.snapshot.dataset.sourceDocuments?.find(
+          (document) => document.sourcePath === "quiz-50-2024.md",
+        );
+        assert.equal(repairedDocument?.role, "unknown");
+        assert.include(
+          repairedDocument?.warnings ?? [],
+          "Provider omitted this document during batched source classification; marked unknown for review.",
+        );
+      }),
+  );
 });

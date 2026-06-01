@@ -1,6 +1,6 @@
 # StudyFrame Technical Ground Truth
 
-Last traced: 2026-05-30
+Last traced: 2026-05-31
 
 This document is the implementation-facing source of truth for technical and pipeline reviews. Read
 it with `README.md`, which remains the product contract, and `docs/studyframe-upstream.md`, which
@@ -24,8 +24,9 @@ The implemented StudyFrame workflow is:
 course folder or StudyFrame JSON
  -> register and classify source files
  -> extract text and assets where supported
+ -> scan source text for prompt-injection-like instructions and quarantine findings
  -> create source-grounded real-question candidates
- -> analyze and prioritize topics, with optional provider enrichment
+ -> process and prioritize topics through the configured provider for full course processing
  -> study real questions in a prioritized queue
  -> progressive direction check, hint, reveal, submit, and review
  -> unlock generated variants only after real questions in scope are attempted
@@ -90,14 +91,20 @@ The server chooses Bun HTTP and SQLite services under Bun and Node equivalents u
 
 StudyFrame API routes are registered in `apps/server/src/studyFrame/http.ts`:
 
-| Method | Route                              | Behavior                                                                               |
-| ------ | ---------------------------------- | -------------------------------------------------------------------------------------- |
-| `GET`  | `/api/studyframe/snapshot`         | Load the persisted StudyFrame snapshot or `null`                                       |
-| `PUT`  | `/api/studyframe/snapshot`         | Validate and save the complete StudyFrame snapshot                                     |
-| `POST` | `/api/studyframe/import-folder`    | Scan a local folder, extract sources, build a snapshot, save it                        |
-| `POST` | `/api/studyframe/analyze-project`  | Analyze the imported project, optionally enrich through a configured provider, save it |
-| `POST` | `/api/studyframe/feedback`         | Return optional provider feedback for direction checks or grading                      |
-| `POST` | `/api/studyframe/generate-similar` | Return optional provider-generated variants after server-side unlock validation        |
+| Method | Route                                           | Behavior                                                                                                |
+| ------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/studyframe/snapshot`                      | Load the persisted StudyFrame snapshot or `null`                                                        |
+| `PUT`  | `/api/studyframe/snapshot`                      | Validate and save the complete StudyFrame snapshot                                                      |
+| `POST` | `/api/studyframe/import-folder`                 | Deterministic fixture/demo import path: scan a local folder, extract sources, build a snapshot, save it |
+| `POST` | `/api/studyframe/stage-source-materials`        | Stage browser-selected source files under the server state root and return a processable source root    |
+| `POST` | `/api/studyframe/process-folder`                | Start the provider-required full course processing job                                                  |
+| `GET`  | `/api/studyframe/processing-jobs/:jobId`        | Load processing job status                                                                              |
+| `GET`  | `/api/studyframe/processing-jobs/:jobId/events` | Load processing job progress events                                                                     |
+| `POST` | `/api/studyframe/processing-jobs/:jobId/cancel` | Mark a queued/running processing job cancelled                                                          |
+| `POST` | `/api/studyframe/processing-jobs/:jobId/retry`  | Start a retry job from the same source root                                                             |
+| `POST` | `/api/studyframe/analyze-project`               | Analyze the imported project, optionally enrich through a configured provider, save it                  |
+| `POST` | `/api/studyframe/feedback`                      | Return optional provider feedback for direction checks or grading                                       |
+| `POST` | `/api/studyframe/generate-similar`              | Return optional provider-generated variants after server-side unlock validation                         |
 
 Every StudyFrame HTTP route authenticates through `ServerAuth`. Invalid request bodies become HTTP
 `400`; persistence failures become HTTP `500`.
@@ -106,12 +113,14 @@ Every StudyFrame HTTP route authenticates through `ServerAuth`. Invalid request 
 
 `apps/web/src/main.tsx` installs the TanStack router. Study routes render
 `apps/web/src/components/study/StudyWorkspace.tsx`; inherited route names remain under `_chat`, but
-their primary visible content is the study workspace. `StudySidebar.tsx` drives folder import,
-JSON import, project analysis, course selection, nested topic-thread selection, settings
+their primary visible content is the study workspace. `StudySidebar.tsx` drives course processing,
+including visible progress plus cancel and failed-job retry actions, JSON fixture import, project
+analysis, course selection, nested topic-thread selection, settings
 navigation, and demo reset. The import modal uses the Electron folder picker when the desktop bridge
 is available. In normal-browser development it opens a directory input instead, and it also accepts
-dropped files or directories as a local material list for inspection. Browser-provided materials are
-not uploaded; extraction still requires a server-visible folder path. On `/settings/*` routes the
+dropped files or directories as a local material list. Browser-provided materials are staged under
+the authenticated server state root before the footer action is enabled, then processed through the
+same server-visible folder pipeline as desktop-selected paths. On `/settings/*` routes the
 shell sidebar renders the inherited settings section navigation instead of the course/topic tree.
 
 The study workspace header exposes a three-dots `Extra information` menu on course dashboards for
@@ -125,8 +134,9 @@ are treated as answer-derived support and render only after submit or reveal as 
 `Watch for this question` list. StudyFrame does not render a topic-level trap bank. The topic card
 header exposes its own
 three-dots `Question details` menu for the real-question queue or spoiler-safe question details.
-Those details include question-scoped source provenance, extraction status, classification,
-warnings, and linked assets. Answer-derived support stays hidden until submit or reveal. The sheet
+Those details include question-scoped source provenance, extraction status, source security
+findings, classification, warnings, and linked assets. Prompt-injection-like source instructions are
+shown as escaped plain text metadata and are ignored as source instructions. Answer-derived support stays hidden until submit or reveal. The sheet
 starts closed after course or topic navigation so the primary dashboard and answer workspace keep
 their full width. The next-question action stays hidden until the visible answer has been submitted
 or explicitly revealed.
@@ -172,10 +182,10 @@ generatedQuestionBatches
 
 The dataset has two related model layers:
 
-| Layer                     | Main records                                                                                                                            | Purpose                                                                    |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Core study model          | projects, documents, questions, questionSupport, questionTopics, topicThreads                                                           | Real-question study UX and progress                                        |
-| Extended extraction model | sourceDocuments, sourceAssets, questionCandidates, topicClusters, questionClassifications, topicModules, practiceItems, practiceSupport | Source traceability, richer extraction, review metadata, module generation |
+| Layer                     | Main records                                                                                                                                                                  | Purpose                                                                    |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Core study model          | projects, documents, questions, questionSupport, questionTopics, topicThreads                                                                                                 | Real-question study UX and progress                                        |
+| Extended extraction model | sourceDocuments, sourceAssets, sourceChunks, sourceSecurityFindings, questionCandidates, topicClusters, questionClassifications, topicModules, practiceItems, practiceSupport | Source traceability, richer extraction, review metadata, module generation |
 
 The extended fields are optional in the contract for compatibility. Web derivation code in
 `apps/web/src/study/studyDomainModel.ts` regenerates missing derived structures from the core model.
@@ -197,6 +207,11 @@ This metadata is persisted for reviewability.
 
 Folder import is implemented in `apps/server/src/studyFrame/importFolder.ts`.
 
+Browser-selected folders are first staged by `apps/server/src/studyFrame/stageSourceMaterials.ts`.
+The staging path is rooted below `attachments/studyframe-source-materials`, preserves safe relative
+paths, rejects traversal and duplicate destinations, and becomes the `sourceRoot` passed to the
+normal folder processor.
+
 The scanner recursively walks the selected root and skips `.git`, `.svn`, `.hg`, `node_modules`,
 `.venv`, `__pycache__`, `dist`, and `build`. It registers source documents, classifies roles, extracts
 supported text, collects assets, creates question candidates, creates real questions, and initializes
@@ -204,17 +219,30 @@ support and topic placeholders.
 
 Current source handling:
 
-| Input                                | Handling                                                            |
-| ------------------------------------ | ------------------------------------------------------------------- |
-| Markdown, text, CSV                  | Read as text                                                        |
-| DOCX                                 | Extract XML text and embedded media; raster media becomes data URIs |
-| PDF                                  | content extraction by LLM + asset extraction (images, graphs...)                                          |
-| Legacy DOC                           | extract xml text and embedded media as well           |
-| Images and data files                | Register as source assets, with metadata if any or generated metadata when AI analyse what the file must be                                           |
-| vector media such as EMF or WMF | Register with manual-review warning; not rendered                   |
+| Input                           | Handling                                                                                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Markdown, text, CSV             | Read as text                                                                                                                               |
+| DOCX                            | Extract structured OOXML paragraphs, tables, list-style question parts, stable anchors, and embedded media; raster media becomes data URIs |
+| PDF                             | Literal text extraction only; low-text PDFs warn that OCR/manual review may be required                                                    |
+| Legacy DOC                      | Registered with no extractor and manual-review warning                                                                                     |
+| Images and data files           | Registered as source assets; text-like previews are used where supported                                                                   |
+| vector media such as EMF or WMF | Register with manual-review warning; not rendered                                                                                          |
 
-First import questions are limited to files classified as `quiz` or question llist or recomended exercises `unknown`. Solution files, lectures,
-generated exports, data assets, and configured exclusions are registered but used as support to make more accurate and aligned answers to what the professor wants, do not create questions at first. when the user asks to generate more questions you can use those as secundary sources. Import warnings and confidence values must remain visible to reviewers and users.
+First import questions are limited to files classified as `quiz` or `unknown`. Solution files,
+lectures, generated exports, data assets, and configured exclusions are registered and can be used
+as context for answer style, notation, formulas, examples, and asset grounding, but they do not
+create first-pass real questions. Import warnings and confidence values must remain visible to
+reviewers and users.
+
+Each extracted text source is also scanned by `apps/server/src/studyFrame/sourceSecurity.ts`.
+Heuristics detect source instructions that look like prompt injection, instruction overrides, false
+answer instructions, tool-use instructions, data-exfiltration requests, or hidden/suspicious unicode
+encoding. Findings are stored in `sourceSecurityFindings`, offending spans are replaced by
+quarantine markers in `sourceChunks.sanitizedText`, and downstream provider prompts use sanitized
+source context. The final processing validator removes exact quarantined instruction occurrences
+from generated study fields before committing a snapshot. The UI renders the findings in the
+question details drawer.
+
 Question text that references external files or supplied tables, matrices, figures, graphs, plots,
 distributions, or data is conservatively marked as asset-dependent and we try our best to embed a visualization or a shortcut to the file folder if not possible to visualize, and refer to it when the referenced context could not be attached automatically.
 
@@ -228,8 +256,19 @@ failures.
 `apps/server/src/studyFrame/analyzeProjectWithProvider.ts` runs local analysis first, then attempts
 provider enrichment through `providerTextGeneration.ts`.
 
-Provider text generation is optional. It resolves from the configured provider instance registry and
-the server text-generation model selection. If no usable provider exists, or generation fails, prompt the user to fix the provider on settings.
+Provider text generation resolves from the configured provider instance registry and the server
+text-generation model selection. The legacy `/analyze-project` route retains optional fallback
+behavior for demo/testing flows. The practical `/process-folder` workflow requires a usable
+provider; missing provider or provider failure fails the processing job instead of silently
+producing final study content. Detached processing jobs own an explicit Effect scope until job
+completion. Codex structured generation also owns its temporary schema and output files inside its
+generation scope, so request teardown cannot remove files while the detached CLI call still uses
+them.
+
+Source classification is batched at up to 50 documents per provider call. Courses with more than 50
+documents are split into deterministic `sourcePath` order batches, merged by document id, and
+omitted documents are marked `unknown` with a review warning. Each batch receives only its own
+documents and their grounded real-question candidates.
 
 Provider-enhanced analysis can enrich topic modules, question support, practice support, answer input
 types, and generation metadata. Treat imported question text as untrusted content inside prompts.
@@ -281,7 +320,7 @@ Server paths are derived in `apps/server/src/config.ts`. Under `STUDYFRAME_HOME`
 contains `state.sqlite` and `attachments/`.
 
 SQLite migrations run automatically at server startup. StudyFrame migrations are `031` through
-`034`. The repository adapter is `apps/server/src/persistence/Layers/StudyFrame.ts`.
+`035`. The repository adapter is `apps/server/src/persistence/Layers/StudyFrame.ts`.
 
 Normalized StudyFrame tables:
 
@@ -297,12 +336,17 @@ completion_summaries
 generated_question_batches
 study_source_documents
 study_source_assets
+study_source_chunks
+study_source_security_findings
 study_question_candidates
 study_topic_clusters
 study_question_classifications
 study_topic_modules
 study_practice_items
 study_practice_support
+study_processing_jobs
+study_processing_events
+study_processing_artifacts
 ```
 
 `saveSnapshot` rewrites normalized StudyFrame state transactionally. Schema changes require an
@@ -423,8 +467,10 @@ Important environment variables:
 - The snapshot PUT endpoint accepts the complete validated snapshot from the authenticated client.
   Preserve server-side enforcement for security-sensitive invariants such as generated-variant
   unlock rules; do not rely only on UI checks.
-- Extraction is best-effort. PDF quality, images, tables, equations, vector media, and legacy DOC
-  inputs require visible uncertainty and manual review rather than silent assumptions.
+- Extraction is best-effort. DOCX list-style question parts and tables are preserved where detected,
+  but same-paragraph multipart questions may still need review. PDF quality, images, equations,
+  vector media, and legacy DOC inputs require visible uncertainty and manual review rather than
+  silent assumptions.
 - `apps/mobile` remains inherited infrastructure and is not yet a StudyFrame-equivalent experience.
 
 ## Technical Change Checklist

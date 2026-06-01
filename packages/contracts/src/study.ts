@@ -1,6 +1,8 @@
 import * as Schema from "effect/Schema";
 
 import { StudyLlmGenerationMetadata } from "./studyLlm.ts";
+import { StudySourceChunk } from "./studyProcessing.ts";
+import { StudySourceSecurityFinding } from "./studySecurity.ts";
 
 const IsoString = Schema.String;
 
@@ -352,6 +354,8 @@ export const StudyDataset = Schema.Struct({
   topicThreads: Schema.Array(StudyTopicThread),
   sourceDocuments: Schema.optionalKey(Schema.Array(StudySourceDocument)),
   sourceAssets: Schema.optionalKey(Schema.Array(StudySourceAsset)),
+  sourceChunks: Schema.optionalKey(Schema.Array(StudySourceChunk)),
+  sourceSecurityFindings: Schema.optionalKey(Schema.Array(StudySourceSecurityFinding)),
   questionCandidates: Schema.optionalKey(Schema.Array(StudyQuestionCandidate)),
   topicClusters: Schema.optionalKey(Schema.Array(StudyTopicCluster)),
   questionClassifications: Schema.optionalKey(Schema.Array(StudyQuestionClassification)),

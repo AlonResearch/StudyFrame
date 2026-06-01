@@ -11,8 +11,10 @@ import type {
   StudyQuestionSupport,
   StudyQuestionTopic,
   StudySourceAsset,
+  StudySourceChunk,
   StudySourceDocument,
   StudySourceFileType,
+  StudySourceSecurityFinding,
   StudyTopicCluster,
   StudyTopicModule,
   StudyTopicThread,
@@ -30,6 +32,7 @@ import {
   matchesManifestPattern,
   type StudyFrameImportManifest,
 } from "./golden/manifest.ts";
+import { makeSourceChunks, scanSourceTextSecurity } from "./sourceSecurity.ts";
 
 const EXCLUDED_DIRECTORIES = new Set([
   ".git",
@@ -70,6 +73,7 @@ interface ExtractedText {
   readonly text: string;
   readonly confidence: number;
   readonly warnings: readonly string[];
+  readonly questionDrafts?: readonly CandidateDraft[];
 }
 
 interface FileRecord {
@@ -138,6 +142,8 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
   );
   const sourceDocuments: StudySourceDocument[] = [];
   const sourceAssets: StudySourceAsset[] = [];
+  const sourceChunks: StudySourceChunk[] = [];
+  const sourceSecurityFindings: StudySourceSecurityFinding[] = [];
   const questionCandidates: StudyQuestionCandidate[] = [];
   const questions: StudyQuestion[] = [];
   const questionSupport: StudyQuestionSupport[] = [];
@@ -161,16 +167,47 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
     let extraction: ExtractedText = { text: "", confidence: 0.85, warnings: [] };
 
     if (classification.canExtractText) {
-      extraction = yield* extractText(fs, file.absolutePath, classification.fileType);
+      extraction = yield* extractText(
+        fs,
+        file.absolutePath,
+        file.relativePath,
+        classification.fileType,
+      );
     }
     const embeddedDocxAssets =
       classification.fileType === "docx"
         ? yield* extractDocxAssets(fs, file.absolutePath, file.relativePath)
         : [];
+    const securityScan = scanSourceTextSecurity({
+      projectId,
+      documentId: sourceDocumentId,
+      sourcePath: file.relativePath,
+      text: extraction.text,
+      createdAt: now,
+    });
+    const effectiveExtractionConfidence =
+      securityScan.findings.length > 0
+        ? Math.max(0, extraction.confidence - 0.15)
+        : extraction.confidence;
+    sourceSecurityFindings.push(...securityScan.findings);
+    sourceChunks.push(
+      ...makeSourceChunks({
+        projectId,
+        documentId: sourceDocumentId,
+        sourcePath: file.relativePath,
+        rawText: extraction.text,
+        sanitizedText: securityScan.sanitizedText,
+        findings: securityScan.findings,
+      }),
+    );
 
     const documentWarnings = [
       ...classification.warnings,
       ...extraction.warnings.map((warning) => `${file.relativePath}: ${warning}`),
+      ...securityScan.findings.map(
+        (finding) =>
+          `${file.relativePath}: Source security ${finding.severity}: ${finding.normalizedIntent}`,
+      ),
       ...embeddedDocxAssets.flatMap((asset) => (asset.warning ? [asset.warning] : [])),
     ];
     warnings.push(...documentWarnings);
@@ -182,7 +219,7 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
       role: classification.role,
       year,
       quizLabel,
-      extractionConfidence: extraction.confidence,
+      extractionConfidence: effectiveExtractionConfidence,
       warnings: documentWarnings,
     });
 
@@ -196,7 +233,7 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
         contentText: assetText,
         contentJson: null,
         localUri: file.absolutePath,
-        extractionConfidence: extraction.confidence,
+        extractionConfidence: effectiveExtractionConfidence,
       });
     }
     const embeddedAssetIds = embeddedDocxAssets.map((asset) => {
@@ -217,12 +254,15 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
     if (
       excludedFromAnalysis ||
       !classification.canCreateQuestions ||
-      extraction.text.trim().length === 0
+      securityScan.sanitizedText.trim().length === 0
     ) {
       continue;
     }
 
-    const candidateDrafts = extractQuestionDrafts(extraction.text, file.relativePath);
+    const candidateDrafts =
+      extraction.questionDrafts && securityScan.findings.length === 0
+        ? extraction.questionDrafts
+        : extractQuestionDrafts(securityScan.sanitizedText, file.relativePath);
     for (const [index, draft] of candidateDrafts.entries()) {
       const fingerprint = normalizePrompt(draft.rawPromptMarkdown);
       if (
@@ -239,7 +279,10 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
       const dependsOnAssets =
         embeddedAssetIds.length > 0 || referencesExternalContext(draft.rawPromptMarkdown);
       const needsManualReview =
-        dependsOnAssets || extraction.confidence < 0.8 || documentWarnings.length > 0;
+        dependsOnAssets ||
+        effectiveExtractionConfidence < 0.8 ||
+        documentWarnings.length > 0 ||
+        securityScan.findings.length > 0;
       const pointValue = draft.pointValue ?? 1;
 
       questionCandidates.push({
@@ -252,7 +295,7 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
         sourceQuizLabel: quizLabel ? `${quizLabel} ${draft.label}` : draft.label,
         pointValue,
         assetIds: embeddedAssetIds,
-        extractionConfidence: extraction.confidence,
+        extractionConfidence: effectiveExtractionConfidence,
         needsManualReview,
       });
       questions.push({
@@ -268,7 +311,7 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
         isRealQuestion: true,
         generatedFromQuestionIds: [],
         dependsOnAssets,
-        extractionConfidence: extraction.confidence,
+        extractionConfidence: effectiveExtractionConfidence,
         createdAt: now,
       });
       questionTopics.push({
@@ -334,6 +377,8 @@ export const importFolderToSnapshot = Effect.fn("StudyFrame.importFolderToSnapsh
     topicThreads,
     sourceDocuments,
     sourceAssets,
+    sourceChunks,
+    sourceSecurityFindings,
     questionCandidates,
     topicClusters,
     questionClassifications,
@@ -495,6 +540,7 @@ function isSourceDocumentRole(value: string): value is StudySourceDocument["role
 function extractText(
   fs: FileSystem.FileSystem,
   filePath: string,
+  relativePath: string,
   fileType: StudySourceFileType,
 ): Effect.Effect<ExtractedText, StudyFrameImportFolderError> {
   return Effect.gen(function* () {
@@ -510,7 +556,7 @@ function extractText(
     }
 
     if (fileType === "docx") {
-      return yield* extractDocxText(fs, filePath);
+      return yield* extractDocxText(fs, filePath, relativePath);
     }
 
     if (fileType === "pdf") {
@@ -528,6 +574,7 @@ function extractText(
 function extractDocxText(
   fs: FileSystem.FileSystem,
   filePath: string,
+  relativePath: string,
 ): Effect.Effect<ExtractedText, StudyFrameImportFolderError> {
   return Effect.gen(function* () {
     const buffer = Buffer.from(
@@ -544,11 +591,15 @@ function extractDocxText(
       };
     }
 
-    const text = stripDocxXml(documentXml.toString("utf8"));
+    const structured = extractStructuredDocxContent(documentXml.toString("utf8"), relativePath);
+    const text = structured.text;
     return {
       text,
       confidence: text.trim().length > 0 ? 0.9 : 0.35,
       warnings: text.trim().length > 0 ? [] : ["DOCX extraction produced no text."],
+      ...(structured.questionDrafts.length > 0
+        ? { questionDrafts: structured.questionDrafts }
+        : {}),
     };
   });
 }
@@ -661,16 +712,146 @@ function findEndOfCentralDirectory(buffer: Buffer): number {
   return -1;
 }
 
-function stripDocxXml(xml: string): string {
+type DocxContentBlock =
+  | {
+      readonly kind: "paragraph";
+      readonly text: string;
+      readonly numId: string | null;
+      readonly level: number | null;
+    }
+  | {
+      readonly kind: "table";
+      readonly text: string;
+    };
+
+function extractStructuredDocxContent(
+  xml: string,
+  relativePath: string,
+): { readonly text: string; readonly questionDrafts: readonly CandidateDraft[] } {
+  const body = xml.match(/<w:body\b[^>]*>([\s\S]*?)<\/w:body>/u)?.[1] ?? xml;
+  const blocks = [...body.matchAll(/<w:p\b[\s\S]*?<\/w:p>|<w:tbl\b[\s\S]*?<\/w:tbl>/gu)]
+    .map((match): DocxContentBlock | null => {
+      const block = match[0];
+      if (block.startsWith("<w:tbl")) {
+        const text = renderDocxTable(block);
+        return text ? { kind: "table", text } : null;
+      }
+      const text = docxText(block);
+      if (!text) return null;
+      return {
+        kind: "paragraph",
+        text,
+        numId: block.match(/<w:numId\b[^>]*w:val="([^"]+)"/u)?.[1] ?? null,
+        level: parseOptionalInteger(block.match(/<w:ilvl\b[^>]*w:val="([^"]+)"/u)?.[1]),
+      };
+    })
+    .filter((block): block is DocxContentBlock => block !== null);
+  return {
+    text: blocks
+      .map((block) => block.text)
+      .join("\n\n")
+      .trim(),
+    questionDrafts: makeDocxQuestionDrafts(blocks, relativePath),
+  };
+}
+
+function renderDocxTable(xml: string): string {
+  const rows = [...xml.matchAll(/<w:tr\b[\s\S]*?<\/w:tr>/gu)]
+    .map((row) =>
+      [...row[0].matchAll(/<w:tc\b[\s\S]*?<\/w:tc>/gu)]
+        .map((cell) => docxText(cell[0]))
+        .filter(Boolean),
+    )
+    .filter((row) => row.length > 0);
+  return rows.map((row) => `| ${row.join(" | ")} |`).join("\n");
+}
+
+function docxText(xml: string): string {
   return decodeXmlEntities(
-    xml
-      .replace(/<w:tab\/>/g, "\t")
-      .replace(/<w:br\/>/g, "\n")
-      .replace(/<\/w:p>/g, "\n")
-      .replace(/<[^>]+>/g, ""),
+    [...xml.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/gu)]
+      .map((match) => match[1] ?? "")
+      .join("")
+      .replace(/<w:tab\/>/gu, "\t")
+      .replace(/<w:br\/>/gu, "\n"),
   )
-    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\s+/gu, " ")
     .trim();
+}
+
+function makeDocxQuestionDrafts(
+  blocks: readonly DocxContentBlock[],
+  relativePath: string,
+): CandidateDraft[] {
+  const drafts: CandidateDraft[] = [];
+  let context: string[] = [];
+  let started = false;
+
+  const addDraft = (text: string) => {
+    const rawPromptMarkdown = unique([...context, text])
+      .join("\n\n")
+      .trim();
+    if (rawPromptMarkdown.length < 20) return;
+    const number = drafts.length + 1;
+    drafts.push({
+      sourceAnchor: `${relativePath}#question=${number}`,
+      rawPromptMarkdown,
+      label: `Q${number}`,
+      pointValue: extractPointValue(text),
+    });
+  };
+
+  for (const block of blocks) {
+    if (block.kind === "table") {
+      if (started) context.push(block.text);
+      continue;
+    }
+    const text = block.text.trim();
+    if (!text) continue;
+    if (!started) {
+      if (isDocxPreamble(text)) continue;
+      if (!isStrongDocxQuestionStem(text) && !hasDocxQuestionIntent(text)) continue;
+      started = true;
+    }
+
+    if (hasDocxQuestionIntent(text)) {
+      addDraft(text);
+      continue;
+    }
+    if (isStrongDocxQuestionStem(text)) {
+      context = [text];
+      continue;
+    }
+    if (context.length > 0) context.push(text);
+  }
+
+  return drafts;
+}
+
+function isDocxPreamble(text: string): boolean {
+  return /data\s*&?\s*signal analysis|quiz duration|test duration|calculator|no bags|smartphones|books are allowed|verify that axes|clear handwriting|scribbles|pay attention to the instructions|full analytic solution|exact function|limited to 2-3 sentences|python packages|submit to|adoc\/pdf|py\/ipynb|use \?function|^formulas?:|^auc\s*=/iu.test(
+    text,
+  );
+}
+
+function isStrongDocxQuestionStem(text: string): boolean {
+  return /\b(?:the file|the table|the total percentage|the firing rates?|the eeg|the response of|neurons? .+ (?:fire|are normally|in response)|short\s*true|questions?)\b/iu.test(
+    text,
+  );
+}
+
+function hasDocxQuestionIntent(text: string): boolean {
+  return (
+    text.includes("?") ||
+    /\b(?:what|which|compute|calculat(?:e|ing)|draw|plot|explain|estimate|derive|show|quantify|reconstruct|claim)\b/iu.test(
+      text,
+    )
+  );
+}
+
+function parseOptionalInteger(value: string | undefined): number | null {
+  if (value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : null;
 }
 
 function extractPdfLiteralText(buffer: Buffer): string {
@@ -758,7 +939,7 @@ function looksLikeQuestion(text: string): boolean {
 
 function referencesExternalContext(text: string): boolean {
   return (
-    /\b[\w.-]+\.(?:csv|mat|pkl|pickle|xlsx?|json|png|jpe?g|gif|bmp|tiff?|pdf)\b/i.test(text) ||
+    /\b[\w.-]+\.(?:csv|txt|mat|pkl|pickle|xlsx?|json|png|jpe?g|gif|bmp|tiff?|pdf)\b/i.test(text) ||
     /\b(?:data\s+)?file\b/i.test(text) ||
     /\b(?:given|following|shown|provided|referenced|attached)\s+(?:\w+\s+){0,3}(?:table|matrix|figure|graph|plot|distribution|data)\b/i.test(
       text,

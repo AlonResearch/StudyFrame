@@ -25,3 +25,5 @@ export * from "./study.ts";
 export * from "./studyFeedback.ts";
 export * from "./studyGeneration.ts";
 export * from "./studyLlm.ts";
+export * from "./studyProcessing.ts";
+export * from "./studySecurity.ts";

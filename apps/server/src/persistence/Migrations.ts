@@ -47,6 +47,7 @@ import Migration0031 from "./Migrations/031_StudyFrameSchema.ts";
 import Migration0032 from "./Migrations/032_StudyFramePersistencePatch.ts";
 import Migration0033 from "./Migrations/033_StudyFrameDomainModel.ts";
 import Migration0034 from "./Migrations/034_StudyFrameLlmMetadata.ts";
+import Migration0035 from "./Migrations/035_StudyFrameProcessingJobs.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -93,6 +94,7 @@ export const migrationEntries = [
   [32, "StudyFramePersistencePatch", Migration0032],
   [33, "StudyFrameDomainModel", Migration0033],
   [34, "StudyFrameLlmMetadata", Migration0034],
+  [35, "StudyFrameProcessingJobs", Migration0035],
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>
