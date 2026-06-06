@@ -4,6 +4,24 @@ StudyFrame is a desktop study workspace that turns a course folder or a list of 
 
 Students open a local course folder containing past exams, quizzes, lecture material, solutions, and supporting files. StudyFrame can also hold a local material list for inspection before extraction. It organizes extracted material into topics, gives a brief explanation of the core concepts, and guides the student through real past questions before offering generated practice.
 
+## Case Showcase: From Course Folder To Practice
+
+This alpha walkthrough uses a Signal and Data Analysis course folder. StudyFrame turns the local
+material set into a study queue, keeps extracted real questions first, and gives spoiler-safe help
+while the student is still working.
+
+| Import course material                                                                                                                    | Check topic priority                                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![StudyFrame import course dialog with local folder and drag-and-drop material options.](docs/assets/readme/studyframe-import-course.png) | ![StudyFrame learning tracker showing topic priorities, real question counts, weighted points, confidence, and subtypes.](docs/assets/readme/studyframe-topic-priority.png) |
+
+| Start with a brief refresher                                                                                                                  | Work real questions with safe guidance                                                                                                                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![StudyFrame topic view showing a compact information theory refresher before practice.](docs/assets/readme/studyframe-brief-explanation.png) | ![StudyFrame real-question workspace showing an in-progress answer and direction check feedback without revealing the final solution.](docs/assets/readme/studyframe-direction-check.png) |
+
+| Review after answering                                                                                                                                                     |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![StudyFrame answer review showing feedback, worked answer, and question-specific watch-outs after the student answered.](docs/assets/readme/studyframe-answer-review.png) |
+
 This README is the product contract for builders. StudyFrame is under active development.
 
 ## Quick Startup
