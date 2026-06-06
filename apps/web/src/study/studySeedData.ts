@@ -287,6 +287,284 @@ export const studySeedData: StudyDataset = withDerivedStudyDomainModel({
       isPrimary: true,
     },
   ],
+  topicModules: [
+    {
+      id: "module-topic-spike-train-statistics",
+      projectId: "signal-data-analysis",
+      topicClusterId: "cluster-topic-spike-train-statistics",
+      theorySummaryMarkdown: [
+        "Spike-train statistics describe how neurons fire over time. The same stimulus can produce different spike trains, so summarize spike trains using rate and variability measures.",
+        "",
+        "Core quantities:",
+        "",
+        "- Mean firing rate: `r = number of spikes / recording duration`",
+        "- Inter-spike interval: `ISI_i = t_{i+1} - t_i`",
+        "- Coefficient of variation: `CV = std(ISI) / mean(ISI)`",
+        "- Fano factor: `FF = Var(spike count) / mean(spike count)`",
+        "- Poisson benchmark: count mean equals variance, `FF = 1`, exponential ISIs, `CV = 1`, and constant hazard.",
+        "",
+        "Interpretation:",
+        "",
+        "- `CV < 1` or `FF < 1`: more regular than the Poisson benchmark.",
+        "- `CV = 1` or `FF = 1`: Poisson-like for that statistic, but not proof of a Poisson process.",
+        "- `CV > 1` or `FF > 1`: bursty, irregular, or over-dispersed activity.",
+      ].join("\n"),
+      formulaSheetMarkdown: [
+        "- `r = N_spikes / T`",
+        "- `ISI_i = t_{i+1} - t_i`",
+        "- `CV = std(ISI) / mean(ISI)`",
+        "- `FF = Var(N) / E[N]`",
+        "- `P(n) = exp(-lambda) lambda^n / n!`, where `lambda = rT`",
+        "- Homogeneous Poisson: `E[N] = Var(N) = lambda`, `CV = 1`, `FF = 1`",
+      ].join("\n"),
+      commonTrapsMarkdown: [
+        "- `CV = 1` does not prove a process is Poissonian.",
+        "- `FF = 1` in one window size does not guarantee `FF = 1` in every window size.",
+        "- A refractory period violates the memoryless property of a homogeneous Poisson process.",
+        "- CV and FF can disagree because they measure different aspects of spike statistics.",
+      ].join("\n"),
+      subtypeCoverageJson: {
+        subtypes: [
+          "Firing-rate and Fano factor",
+          "ISI variability",
+          "Poisson process",
+          "Hazard function",
+        ],
+        highYieldSkills: [
+          "Choose the statistic from the data type: counts, intervals, or hazard.",
+          "Convert milliseconds to seconds before reporting Hz.",
+          "Compare CV and FF with the Poisson benchmark without treating either as proof.",
+        ],
+        questionPatterns: [
+          "Given spike counts across trials or windows, compute rate, variance, and Fano factor.",
+          "Given ISIs, compute mean interval, CV, and regularity relative to Poisson.",
+          "Given a spike-generation rule, reason about hazard, refractoriness, and whether the process is Poisson-like.",
+        ],
+        practiceDrills: [
+          {
+            title: "Poisson count statistics",
+            sourceAnchors: ["Topic_01_Spike_Train_Statistics.md Problem 2"],
+            promptMarkdown:
+              "A homogeneous Poisson neuron fires at a given rate. Compute expected count, count variance, Fano factor, and the probability of observing zero spikes in a fixed window.",
+          },
+          {
+            title: "CV from ISIs",
+            sourceAnchors: ["Topic_01_Spike_Train_Statistics.md Problem 3"],
+            promptMarkdown:
+              "Given a short list of inter-spike intervals, compute mean ISI, population standard deviation, CV, and interpret regularity.",
+          },
+        ],
+        studyFlow: [
+          "Identify whether the data are counts, ISIs, or a hazard rule.",
+          "Convert time units before computing rates.",
+          "Compute the requested statistic.",
+          "Compare against the Poisson benchmark and state the interpretation.",
+        ],
+      },
+      firstExposureComplete: false,
+    },
+    {
+      id: "module-topic-information-theory",
+      projectId: "signal-data-analysis",
+      topicClusterId: "cluster-topic-information-theory",
+      theorySummaryMarkdown: [
+        "Information theory measures uncertainty and how much uncertainty is reduced by observing data.",
+        "",
+        "Core quantities:",
+        "",
+        "- Surprise of one outcome: `h(x) = -log2 p(x)`",
+        "- Entropy: `H(X) = - sum_x p(x) log2 p(x)`",
+        "- Joint entropy: `H(X,Y) = - sum_x sum_y p(x,y) log2 p(x,y)`",
+        "- Conditional entropy: `H(X|Y) = H(X,Y) - H(Y)`",
+        "- Mutual information: `I(X;Y) = H(X) - H(X|Y)`",
+        "",
+        "Interpretation:",
+        "",
+        "- `H(X)` is uncertainty about `X`.",
+        "- `H(X|Y)` is uncertainty remaining after knowing `Y`.",
+        "- `I(X;Y)` is how much knowing `Y` tells us about `X`.",
+        "- Independent variables have `I(X;Y) = 0`; perfect determination gives `H(X|Y) = 0`.",
+      ].join("\n"),
+      formulaSheetMarkdown: [
+        "- `h(x) = -log2 p(x)`",
+        "- `H(X) = -sum_x p(x) log2 p(x)`",
+        "- `H(X,Y) = -sum_x sum_y p(x,y) log2 p(x,y)`",
+        "- `H(X|Y) = H(X,Y) - H(Y)`",
+        "- `I(X;Y) = H(X) - H(X|Y)`",
+        "- `I(X;Y) = H(X) + H(Y) - H(X,Y)`",
+        "- Useful values: `log2(1/2) = -1`, `log2(1/4) = -2`, `log2(0.1) ~= -3.322`, `log2(0.9) ~= -0.152`",
+      ].join("\n"),
+      commonTrapsMarkdown: [
+        "- Do not confuse entropy with probability. Entropy is a weighted average of surprise.",
+        "- `H(X,Y)` is not always `H(X) + H(Y)`; that only holds for independent variables.",
+        "- Conditional entropy and mutual information cannot be negative.",
+        "- Spike count can lose information contained in spike timing.",
+      ].join("\n"),
+      subtypeCoverageJson: {
+        subtypes: ["Entropy", "Conditional entropy", "Mutual information", "Spike-pattern entropy"],
+        highYieldSkills: [
+          "Build the probability table before computing entropy.",
+          "Compute marginals explicitly before using joint or conditional identities.",
+          "Explain each result as uncertainty or uncertainty reduction.",
+        ],
+        questionPatterns: [
+          "Compute entropy for categorical or binary state distributions.",
+          "Compute conditional entropy and mutual information from deterministic or noisy features.",
+          "Compare spike-pattern entropy with spike-count entropy and explain what timing adds.",
+        ],
+        practiceDrills: [
+          {
+            title: "Entropy of disease states",
+            sourceAnchors: ["Topic_02_Information_Theory.md Problem 1"],
+            promptMarkdown:
+              "Given four state probabilities, compute entropy, compare it to the maximum entropy for four states, and interpret the distribution.",
+          },
+          {
+            title: "Neuron response information",
+            sourceAnchors: ["Topic_02_Information_Theory.md Problem 7"],
+            promptMarkdown:
+              "Given liquid priors and spike probabilities by liquid, compute conditional response entropy, response entropy, and mutual information.",
+          },
+        ],
+        studyFlow: [
+          "Write the full probability table.",
+          "Check normalization and compute marginals.",
+          "Choose the entropy identity that matches the question.",
+          "Compute in bits and explain the interpretation.",
+        ],
+      },
+      firstExposureComplete: false,
+    },
+    {
+      id: "module-topic-bayes-map",
+      projectId: "signal-data-analysis",
+      topicClusterId: "cluster-topic-bayes-map",
+      theorySummaryMarkdown: [
+        "ML and MAP are methods to infer which class generated data or which parameter best explains observations.",
+        "",
+        "Core quantities:",
+        "",
+        "- Likelihood `L(theta | x)`: probability or density of observing `x` given hypothesis or parameter `theta`.",
+        "- Log-likelihood: summing logs is equivalent to multiplying independent probabilities.",
+        "- MLE: `theta_MLE = argmax L(theta | x)`.",
+        "- Prior `P(theta)`: initial probability before observing the data.",
+        "- MAP: `theta_MAP = argmax [L(theta | x) P(theta)]`.",
+        "- MAP reverses an MLE decision only when the prior overcomes the likelihood ratio.",
+      ].join("\n"),
+      formulaSheetMarkdown: [
+        "- Independent samples: `L(theta | x) = product_i P(x_i | theta)`",
+        "- `LL(theta) = sum_i ln P(x_i | theta)`",
+        "- `theta_MLE = argmax L(theta | x)`",
+        "- `theta_MAP = argmax L(theta | x) P(theta)`",
+        "- Posterior odds: `P(H1|x) / P(H2|x) = [P(x|H1)P(H1)] / [P(x|H2)P(H2)]`",
+        "- Normal log-likelihood: `LL = -(N/2)ln(2*pi*var) - sum_i (x_i - mu)^2 / (2*var)`",
+      ].join("\n"),
+      commonTrapsMarkdown: [
+        "- Check uniform-distribution bounds before multiplying likelihoods; one impossible observation makes likelihood zero.",
+        "- Include the normalizing constant when comparing Gaussian models with different variances.",
+        "- A prior can break a flat MLE plateau in uniform parameter-estimation problems.",
+        "- Apply logs only after confirming probabilities are positive.",
+      ].join("\n"),
+      subtypeCoverageJson: {
+        subtypes: ["MAP decision", "Estimator comparison", "MLE", "Log-likelihood"],
+        highYieldSkills: [
+          "Separate likelihood evidence from prior probability.",
+          "Use log-likelihood for independent samples instead of multiplying many small values.",
+          "Check distribution support before doing arithmetic.",
+        ],
+        questionPatterns: [
+          "Classify observations under competing uniform, Bernoulli, or normal models.",
+          "Decide whether a prior changes an MLE into a different MAP choice.",
+          "Find the MLE range for a uniform parameter and then apply a prior.",
+        ],
+        practiceDrills: [
+          {
+            title: "Uniform classification",
+            sourceAnchors: ["Topic_03_ML_MAP_Bayes.md Problem 1"],
+            promptMarkdown:
+              "Given two uniform response models and class priors, compute MLE and MAP decisions for repeated observations.",
+          },
+          {
+            title: "Uniform parameter estimation",
+            sourceAnchors: ["Topic_03_ML_MAP_Bayes.md Problem 3"],
+            promptMarkdown:
+              "Given samples from a uniform range centered on an unknown parameter, find the MLE interval and explain how a monotone prior changes the MAP estimate.",
+          },
+        ],
+        studyFlow: [
+          "Check support and reject hypotheses with zero likelihood.",
+          "Compute likelihood or log-likelihood under each hypothesis.",
+          "For MAP, multiply by priors or add log-priors.",
+          "Compare scores and state why the chosen estimator wins.",
+        ],
+      },
+      firstExposureComplete: false,
+    },
+    {
+      id: "module-topic-roc-discrimination",
+      projectId: "signal-data-analysis",
+      topicClusterId: "cluster-topic-roc-discrimination",
+      theorySummaryMarkdown: [
+        "ROC curves evaluate how well a system or neuron distinguishes between two states, such as target versus noise, using a threshold on firing rate or response.",
+        "",
+        "Core quantities:",
+        "",
+        "- Threshold `theta`: a decision rule such as `if response > theta, guess target`.",
+        "- True positive rate / hit rate: probability of guessing target when the stimulus is target.",
+        "- False positive rate / false-alarm rate: probability of guessing target when the stimulus is noise.",
+        "- ROC curve: plot TPR against FPR as the threshold sweeps from high to low.",
+        "- AUC: overall discrimination quality; `0.5` is chance and `1.0` is perfect.",
+      ].join("\n"),
+      formulaSheetMarkdown: [
+        "- `TPR = P(response >= theta | target)`",
+        "- `FPR = P(response >= theta | noise)`",
+        "- For uniform distributions, probabilities are overlap lengths divided by total range length.",
+        "- ROC points are plotted as `(FPR, TPR)`.",
+        "- Trapezoid area: `width * (height_left + height_right) / 2`",
+        "- `AUC = 0.5` chance, `AUC = 1` perfect discrimination.",
+      ].join("\n"),
+      commonTrapsMarkdown: [
+        "- Plot ROC points as `(FPR, TPR)`, not `(TPR, FPR)`.",
+        "- Keep the positive class consistent with the threshold rule.",
+        "- For uniform distributions, check which intervals overlap the threshold region.",
+        "- Use trapezoids, rectangles, and triangles carefully when computing AUC from straight segments.",
+      ].join("\n"),
+      subtypeCoverageJson: {
+        subtypes: ["Threshold effects", "ROC curve", "AUC", "Uniform distributions"],
+        highYieldSkills: [
+          "Identify signal and noise classes before computing rates.",
+          "Translate a threshold into right-tail probability under each distribution.",
+          "Draw the ROC as threshold moves from strict to permissive.",
+        ],
+        questionPatterns: [
+          "Compute TPR and FPR for selected thresholds.",
+          "Draw ROC curves for overlapping uniform or triangular distributions.",
+          "Compute AUC from piecewise-linear ROC segments.",
+        ],
+        practiceDrills: [
+          {
+            title: "Overlapping uniform ROC",
+            sourceAnchors: ["Topic_05_ROC_Discrimination.md Problem 1"],
+            promptMarkdown:
+              "Given target and noise uniform response ranges plus a greater-than-threshold rule, compute ROC points and AUC.",
+          },
+          {
+            title: "Triangular distribution ROC",
+            sourceAnchors: ["Topic_05_ROC_Discrimination.md Problem 2"],
+            promptMarkdown:
+              "Given increasing and decreasing triangular response distributions, compute midpoint TPR/FPR and describe the ROC shape.",
+          },
+        ],
+        studyFlow: [
+          "Choose the positive class and threshold direction.",
+          "Compute TPR and FPR at key thresholds.",
+          "Plot points as `(FPR, TPR)`.",
+          "Compute AUC from the resulting curve.",
+        ],
+      },
+      firstExposureComplete: false,
+    },
+  ],
   questionSupport: [
     {
       id: "support-q-spike-2024-rate-fano",

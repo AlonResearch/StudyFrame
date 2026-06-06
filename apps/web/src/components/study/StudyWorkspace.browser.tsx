@@ -121,7 +121,7 @@ describe("StudyWorkspace", () => {
       .element(page.getByRole("heading", { name: "Brief Explanation", exact: true }))
       .toBeVisible();
     await expect
-      .element(page.getByText("Use firing rate when the question gives spike counts"))
+      .element(page.getByText("Spike-train statistics describe how neurons fire over time"))
       .toBeVisible();
     await expect.element(page.getByText("Core quantities", { exact: true })).toBeVisible();
     await expect.element(page.getByText("Subtopics", { exact: true })).not.toBeInTheDocument();
