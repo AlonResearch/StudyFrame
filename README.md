@@ -6,6 +6,41 @@ Students open a local course folder containing past exams, quizzes, lecture mate
 
 This README is the product contract for builders. StudyFrame is under active development.
 
+## Quick Startup
+
+StudyFrame can use several AI model providers through the inherited T3 Code provider backend. It
+does not resell model access or replace the provider account you already use. Instead, install and
+authenticate the provider's local CLI first, then choose that provider in StudyFrame settings for
+course processing, feedback, and generated practice.
+
+The built-in provider drivers are Codex, Claude, Cursor, and OpenCode. Install and sign in to at
+least one before running full StudyFrame processing:
+
+- **Codex:** install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`.
+- **Claude:** install [Claude Code](https://claude.com/product/claude-code) and run
+  `claude auth login`.
+- **OpenCode:** install [OpenCode](https://opencode.ai) and run `opencode auth login`.
+- **Cursor:** install Cursor's agent CLI, make sure `agent` is on `PATH`, and sign in through the
+  normal Cursor account flow.
+
+After the CLI is installed and authenticated, install StudyFrame dependencies and start the app:
+
+```bash
+bun install --frozen-lockfile
+bun run dev
+```
+
+For the desktop shell and local folder picker workflow, use:
+
+```bash
+bun run dev:desktop
+```
+
+Open the provider settings if StudyFrame reports that course processing needs a configured text
+generation provider. Refresh provider status there after installing a CLI, set the text-generation
+model, and keep the main study workflow focused on real extracted questions before generated
+variants.
+
 ## Core Workflow
 
 ```text

@@ -466,6 +466,22 @@ Install with:
 bun install --frozen-lockfile
 ```
 
+Provider-backed course processing uses the inherited T3 Code provider backend and local
+provider-authenticated CLIs. StudyFrame currently ships built-in drivers for Codex, Claude, Cursor,
+and OpenCode. A normal provider subscription or account can be used, but the matching CLI must be
+installed, authenticated, and discoverable by the server process first. The common startup checks
+are:
+
+```bash
+codex login
+claude auth login
+opencode auth login
+```
+
+Cursor support expects Cursor's `agent` CLI on `PATH` or an equivalent binary path configured in
+provider settings. After installing or authenticating a CLI, refresh provider status in StudyFrame
+settings and select the provider/model used for server text generation.
+
 Important environment variables:
 
 | Variable                                                        | Purpose                           |
