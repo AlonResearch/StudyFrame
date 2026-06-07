@@ -20,6 +20,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceFiles = [
   "package.json",
   "bun.lock",
+  "studyframe.version.json",
   "apps/server/package.json",
   "apps/desktop/package.json",
   "apps/web/package.json",
@@ -201,18 +202,11 @@ try {
     },
   );
 
-  rmSync(resolve(tempRoot, "bun.lock"), { force: true });
-
-  execFileSync("bun", ["install", "--ignore-scripts"], {
-    cwd: tempRoot,
-    stdio: "inherit",
-  });
-
-  const lockfile = readFileSync(resolve(tempRoot, "bun.lock"), "utf8");
+  const versionJson = readFileSync(resolve(tempRoot, "studyframe.version.json"), "utf8");
   assertContains(
-    lockfile,
+    versionJson,
     `"version": "9.9.9-smoke.0"`,
-    "Expected bun.lock to contain the smoke version.",
+    "Expected studyframe.version.json to contain the smoke version.",
   );
 
   const nightlyReleaseMetadata = execFileSync(

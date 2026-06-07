@@ -149,7 +149,7 @@ jobs:
             echo "release_channel=stable" >> "$GITHUB_OUTPUT"
             echo "version=$version" >> "$GITHUB_OUTPUT"
             echo "tag=v$version" >> "$GITHUB_OUTPUT"
-            echo "name=T3 Code v$version" >> "$GITHUB_OUTPUT"
+            echo "name=StudyFrame v$version" >> "$GITHUB_OUTPUT"
             echo "cli_dist_tag=latest" >> "$GITHUB_OUTPUT"
             if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
@@ -232,7 +232,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Align package versions to release version
+      - name: Write StudyFrame release version
         run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
 
       - name: Install Spectre-mitigated MSVC libs
@@ -451,7 +451,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile --filter=t3 --filter=@t3tools/web --filter=@t3tools/scripts
 
-      - name: Align package versions to release version
+      - name: Write StudyFrame release version
         run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
 
       - name: Build web package
@@ -617,11 +617,8 @@ jobs:
       - name: Install release tooling dependencies
         run: bun install --frozen-lockfile --filter=@t3tools/scripts --filter=@t3tools/web
 
-      - name: Align package versions to release version
+      - name: Write StudyFrame release version
         run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
-
-      - name: Refresh release lockfile
-        run: bun install --lockfile-only --ignore-scripts
 
       - name: Deploy and alias channel
         shell: bash
@@ -723,18 +720,14 @@ jobs:
         run: bun install --frozen-lockfile --filter=@t3tools/scripts
 
       - id: update_versions
-        name: Update version strings
+        name: Update StudyFrame release version
         env:
           RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
         run: node scripts/update-release-package-versions.ts "$RELEASE_VERSION" --github-output
 
-      - name: Format package.json files
+      - name: Format StudyFrame version file
         if: steps.update_versions.outputs.changed == 'true'
-        run: bunx oxfmt@0.40.0 apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json
-
-      - name: Refresh lockfile
-        if: steps.update_versions.outputs.changed == 'true'
-        run: bun install --lockfile-only --ignore-scripts
+        run: bunx oxfmt@0.40.0 studyframe.version.json
 
       - name: Commit and push version bump
         if: steps.update_versions.outputs.changed == 'true'
@@ -742,7 +735,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
         run: |
-          if git diff --quiet -- apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json bun.lock; then
+          if git diff --quiet -- studyframe.version.json; then
             echo "No version changes to commit."
             exit 0
           fi
@@ -750,7 +743,7 @@ jobs:
           git config user.name "${{ steps.app_bot.outputs.name }}"
           git config user.email "${{ steps.app_bot.outputs.email }}"
 
-          git add apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json bun.lock
+          git add studyframe.version.json
           git commit -m "chore(release): prepare $RELEASE_TAG"
           git push origin HEAD:main
 

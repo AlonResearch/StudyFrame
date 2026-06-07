@@ -125,4 +125,70 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(resolved.mockUpdates, false);
     }),
   );
+
+  it.effect("resolves StudyFrame build versions before legacy T3 Code env versions", () =>
+    Effect.gen(function* () {
+      const input = {
+        platform: Option.some("win" as const),
+        target: Option.none(),
+        arch: Option.some("x64" as const),
+        outputDir: Option.some("release-test"),
+        skipBuild: Option.some(true),
+        keepStage: Option.none(),
+        signed: Option.none(),
+        verbose: Option.none(),
+        mockUpdates: Option.none(),
+        mockUpdateServerPort: Option.none(),
+      };
+
+      const fromCli = yield* resolveBuildOptions({
+        ...input,
+        buildVersion: Option.some("3.0.0"),
+      }).pipe(
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromEnv({
+              env: {
+                STUDYFRAME_DESKTOP_VERSION: "2.0.0",
+                T3CODE_DESKTOP_VERSION: "9.9.9",
+              },
+            }),
+          ),
+        ),
+      );
+      const fromStudyFrameEnv = yield* resolveBuildOptions({
+        ...input,
+        buildVersion: Option.none(),
+      }).pipe(
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromEnv({
+              env: {
+                STUDYFRAME_DESKTOP_VERSION: "2.0.0",
+                T3CODE_DESKTOP_VERSION: "9.9.9",
+              },
+            }),
+          ),
+        ),
+      );
+      const fromLegacyEnv = yield* resolveBuildOptions({
+        ...input,
+        buildVersion: Option.none(),
+      }).pipe(
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromEnv({
+              env: {
+                T3CODE_DESKTOP_VERSION: "9.9.9",
+              },
+            }),
+          ),
+        ),
+      );
+
+      assert.equal(fromCli.version, "3.0.0");
+      assert.equal(fromStudyFrameEnv.version, "2.0.0");
+      assert.equal(fromLegacyEnv.version, "9.9.9");
+    }),
+  );
 });

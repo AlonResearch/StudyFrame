@@ -11,31 +11,31 @@ import * as TestConsole from "effect/testing/TestConsole";
 import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
 
 import {
-  releasePackageFiles,
+  releaseVersionFiles,
   updateReleasePackageVersions,
   updateReleasePackageVersionsCommand,
 } from "./update-release-package-versions.ts";
 
 const ScriptTestLayer = Layer.mergeAll(NodeServices.layer, TestConsole.layer);
 const runCli = Command.runWith(updateReleasePackageVersionsCommand, { version: "0.0.0" });
-const PackageJsonSchema = Schema.Record(Schema.String, Schema.Unknown);
-const PackageJsonPrettyJson = fromJsonStringPretty(PackageJsonSchema);
-const decodePackageJson = Schema.decodeEffect(PackageJsonPrettyJson);
-const encodePackageJson = Schema.encodeEffect(PackageJsonPrettyJson);
+const JsonObjectSchema = Schema.Record(Schema.String, Schema.Unknown);
+const PrettyJson = fromJsonStringPretty(JsonObjectSchema);
+const decodeJsonObject = Schema.decodeEffect(PrettyJson);
+const encodeJsonObject = Schema.encodeEffect(PrettyJson);
 
-const writePackageJsonFixtures = Effect.fn("writePackageJsonFixtures")(function* (
+const writeVersionJsonFixtures = Effect.fn("writeVersionJsonFixtures")(function* (
   rootDir: string,
   version: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
-  for (const relativePath of releasePackageFiles) {
+  for (const relativePath of releaseVersionFiles) {
     const filePath = path.join(rootDir, relativePath);
     yield* fs.makeDirectory(path.dirname(filePath), { recursive: true });
     yield* fs.writeFileString(
       filePath,
-      `${yield* encodePackageJson({
+      `${yield* encodeJsonObject({
         name: relativePath,
         version,
         private: true,
@@ -49,10 +49,10 @@ const readReleaseVersions = Effect.fn("readReleaseVersions")(function* (rootDir:
   const path = yield* Path.Path;
   const versions = new Map<string, string>();
 
-  for (const relativePath of releasePackageFiles) {
+  for (const relativePath of releaseVersionFiles) {
     const filePath = path.join(rootDir, relativePath);
-    const packageJson = yield* fs.readFileString(filePath).pipe(Effect.flatMap(decodePackageJson));
-    versions.set(relativePath, String(packageJson.version));
+    const versionJson = yield* fs.readFileString(filePath).pipe(Effect.flatMap(decodeJsonObject));
+    versions.set(relativePath, String(versionJson.version));
   }
 
   return versions;
@@ -68,14 +68,14 @@ const captureLogs = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   });
 
 it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
-  it.effect("updates all release package versions under the provided root", () =>
+  it.effect("updates the StudyFrame release version under the provided root", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const baseDir = yield* fs.makeTempDirectoryScoped({
         prefix: "update-release-package-versions-",
       });
 
-      yield* writePackageJsonFixtures(baseDir, "0.0.1");
+      yield* writeVersionJsonFixtures(baseDir, "0.0.1");
 
       const result = yield* updateReleasePackageVersions("1.2.3", { rootDir: baseDir });
       const versions = yield* readReleaseVersions(baseDir);
@@ -83,19 +83,48 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
       assert.deepStrictEqual(result, { changed: true });
       assert.deepStrictEqual(
         Array.from(versions.entries()),
-        releasePackageFiles.map((relativePath) => [relativePath, "1.2.3"]),
+        releaseVersionFiles.map((relativePath) => [relativePath, "1.2.3"]),
       );
     }),
   );
 
-  it.effect("returns changed=false when all versions already match", () =>
+  it.effect("does not update inherited workspace package manifests", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const baseDir = yield* fs.makeTempDirectoryScoped({
+        prefix: "update-release-package-versions-packages-",
+      });
+      const desktopPackageJsonPath = path.join(baseDir, "apps/desktop/package.json");
+
+      yield* writeVersionJsonFixtures(baseDir, "0.0.1");
+      yield* fs.makeDirectory(path.dirname(desktopPackageJsonPath), { recursive: true });
+      yield* fs.writeFileString(
+        desktopPackageJsonPath,
+        `${yield* encodeJsonObject({
+          name: "@t3tools/desktop",
+          version: "0.0.1",
+          private: true,
+        })}\n`,
+      );
+
+      yield* updateReleasePackageVersions("1.2.3", { rootDir: baseDir });
+
+      const desktopPackageJson = yield* fs
+        .readFileString(desktopPackageJsonPath)
+        .pipe(Effect.flatMap(decodeJsonObject));
+      assert.equal(desktopPackageJson.version, "0.0.1");
+    }),
+  );
+
+  it.effect("returns changed=false when the StudyFrame version already matches", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const baseDir = yield* fs.makeTempDirectoryScoped({
         prefix: "update-release-package-versions-unchanged-",
       });
 
-      yield* writePackageJsonFixtures(baseDir, "1.2.3");
+      yield* writeVersionJsonFixtures(baseDir, "1.2.3");
 
       const result = yield* updateReleasePackageVersions("1.2.3", { rootDir: baseDir });
 
@@ -112,7 +141,7 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
       });
       const githubOutputPath = path.join(baseDir, "github-output.txt");
 
-      yield* writePackageJsonFixtures(baseDir, "0.0.1");
+      yield* writeVersionJsonFixtures(baseDir, "0.0.1");
 
       yield* runCli(["--github-output", "--root", baseDir, "2.0.0"]).pipe(
         Effect.provide(
@@ -139,12 +168,12 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
           prefix: "update-release-package-versions-cli-log-",
         });
 
-        yield* writePackageJsonFixtures(baseDir, "3.0.0");
+        yield* writeVersionJsonFixtures(baseDir, "3.0.0");
         yield* runCli(["3.0.0", "--root", baseDir]);
       }),
     ).pipe(
       Effect.tap(({ logs }) => {
-        assert.deepStrictEqual(logs, ["All package.json versions already match release version."]);
+        assert.deepStrictEqual(logs, ["StudyFrame version file already matches release version."]);
         return Effect.void;
       }),
     ),
@@ -157,7 +186,7 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
         prefix: "update-release-package-versions-cli-missing-output-",
       });
 
-      yield* writePackageJsonFixtures(baseDir, "0.0.1");
+      yield* writeVersionJsonFixtures(baseDir, "0.0.1");
 
       const error = yield* runCli(["4.0.0", "--root", baseDir, "--github-output"]).pipe(
         Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }))),

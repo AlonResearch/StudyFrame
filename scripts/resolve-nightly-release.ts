@@ -25,15 +25,15 @@ const RunNumberSchema = Schema.FiniteFromString.check(
   Schema.isGreaterThanOrEqualTo(1),
 );
 const ShaSchema = Schema.String.check(Schema.isPattern(/^[0-9a-f]{7,40}$/i));
-const DesktopPackageJsonSchema = Schema.Struct({
+const StudyFrameVersionJsonSchema = Schema.Struct({
   version: Schema.NonEmptyString,
 });
 
 const RepoRoot = Effect.service(Path.Path).pipe(
   Effect.flatMap((path) => path.fromFileUrl(new URL("..", import.meta.url))),
 );
-const decodeDesktopPackageJson = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(DesktopPackageJsonSchema),
+const decodeStudyFrameVersionJson = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(StudyFrameVersionJsonSchema),
 );
 
 export const resolveNightlyBaseVersion = (version: string) => version.replace(/[-+].*$/, "");
@@ -42,7 +42,7 @@ export const resolveNightlyTargetVersion = (version: string) => {
   const stableCore = resolveNightlyBaseVersion(version);
   const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(stableCore);
   if (!match) {
-    throw new Error(`Invalid desktop package version '${version}'.`);
+    throw new Error(`Invalid StudyFrame release version '${version}'.`);
   }
 
   const [, major, minor, patch] = match;
@@ -66,17 +66,17 @@ export const resolveNightlyReleaseMetadata = (
   };
 };
 
-const readDesktopBaseVersion = Effect.fn("readDesktopBaseVersion")(function* (
+const readStudyFrameBaseVersion = Effect.fn("readStudyFrameBaseVersion")(function* (
   rootDir: string | undefined,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const workspaceRoot = rootDir ? path.resolve(rootDir) : yield* RepoRoot;
-  const packageJsonPath = path.join(workspaceRoot, "apps/desktop/package.json");
-  const packageJson = yield* fs
-    .readFileString(packageJsonPath)
-    .pipe(Effect.flatMap(decodeDesktopPackageJson));
-  return resolveNightlyTargetVersion(packageJson.version);
+  const versionJsonPath = path.join(workspaceRoot, "studyframe.version.json");
+  const versionJson = yield* fs
+    .readFileString(versionJsonPath)
+    .pipe(Effect.flatMap(decodeStudyFrameVersionJson));
+  return resolveNightlyTargetVersion(versionJson.version);
 });
 
 const writeOutput = Effect.fn("writeOutput")(function* (
@@ -124,12 +124,12 @@ const command = Command.make(
       Flag.withDefault(false),
     ),
     root: Flag.string("root").pipe(
-      Flag.withDescription("Workspace root used to resolve apps/desktop/package.json."),
+      Flag.withDescription("Workspace root used to resolve studyframe.version.json."),
       Flag.optional,
     ),
   },
   ({ date, runNumber, sha, githubOutput, root }) =>
-    readDesktopBaseVersion(Option.getOrUndefined(root)).pipe(
+    readStudyFrameBaseVersion(Option.getOrUndefined(root)).pipe(
       Effect.map((baseVersion) => resolveNightlyReleaseMetadata(baseVersion, date, runNumber, sha)),
       Effect.flatMap((metadata) => writeOutput(metadata, githubOutput)),
     ),

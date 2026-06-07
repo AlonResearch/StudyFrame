@@ -444,6 +444,12 @@ typecheck, and tests, builds Electron artifacts for macOS arm64/x64, Linux x64, 
 optionally signs artifacts, merges macOS updater manifests, publishes GitHub releases, deploys the
 hosted web app to Vercel aliases, updates stable version strings, and announces releases to Discord.
 
+StudyFrame product releases use the root `studyframe.version.json` file as the app release version.
+Workspace package manifests remain upstream-owned package metadata and are not bumped for routine
+StudyFrame app releases. Desktop artifacts default to `studyframe.version.json`, accept explicit
+`--build-version`, accept `STUDYFRAME_DESKTOP_VERSION`, and keep `T3CODE_DESKTOP_VERSION` only as a
+legacy fallback. The release version update helper writes `studyframe.version.json` only.
+
 Before a public StudyFrame release, audit inherited `T3 Code` package names, GitHub repository
 metadata, domains, update channels, signing configuration, and distribution behavior. The current
 release workflow still contains inherited branding and hosted-web assumptions.
@@ -491,6 +497,7 @@ Important environment variables:
 | `STUDYFRAME_PORT_OFFSET`, `STUDYFRAME_DEV_INSTANCE`             | Development port selection        |
 | `VITE_HTTP_URL`, `VITE_WS_URL`, `VITE_DEV_SERVER_URL`           | Web-to-server and Vite wiring     |
 | `STUDYFRAME_GOLDEN_ROOT`                                        | External golden dataset path      |
+| `STUDYFRAME_DESKTOP_VERSION`                                    | Desktop artifact version override |
 | `STUDYFRAME_AUTH_TOKEN`                                         | Auth bootstrap where configured   |
 | `STUDYFRAME_TAILSCALE_SERVE`, `STUDYFRAME_TAILSCALE_SERVE_PORT` | Optional Tailscale exposure       |
 | `APP_VERSION`, `VITE_HOSTED_APP_URL`, `VITE_HOSTED_APP_CHANNEL` | Release-hosted web build metadata |

@@ -12,21 +12,16 @@ import * as Schema from "effect/Schema";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
 
-export const releasePackageFiles = [
-  "apps/server/package.json",
-  "apps/desktop/package.json",
-  "apps/web/package.json",
-  "packages/contracts/package.json",
-] as const;
+export const releaseVersionFiles = ["studyframe.version.json"] as const;
 
 interface UpdateReleasePackageVersionsOptions {
   readonly rootDir?: string | undefined;
 }
 
-const PackageJsonSchema = Schema.Record(Schema.String, Schema.Unknown);
-const PackageJsonPrettyJson = fromJsonStringPretty(PackageJsonSchema);
-const decodePackageJson = Schema.decodeUnknownEffect(PackageJsonPrettyJson);
-const encodePackageJson = Schema.encodeEffect(PackageJsonPrettyJson);
+const VersionJsonSchema = Schema.Record(Schema.String, Schema.Unknown);
+const VersionJsonPrettyJson = fromJsonStringPretty(VersionJsonSchema);
+const decodeVersionJson = Schema.decodeUnknownEffect(VersionJsonPrettyJson);
+const encodeVersionJson = Schema.encodeEffect(VersionJsonPrettyJson);
 
 export const updateReleasePackageVersions = Effect.fn("updateReleasePackageVersions")(function* (
   version: string,
@@ -37,15 +32,15 @@ export const updateReleasePackageVersions = Effect.fn("updateReleasePackageVersi
   const rootDir = path.resolve(options.rootDir ?? process.cwd());
   let changed = false;
 
-  for (const relativePath of releasePackageFiles) {
+  for (const relativePath of releaseVersionFiles) {
     const filePath = path.join(rootDir, relativePath);
-    const packageJson = yield* fs.readFileString(filePath).pipe(Effect.flatMap(decodePackageJson));
-    if (packageJson.version === version) {
+    const versionJson = yield* fs.readFileString(filePath).pipe(Effect.flatMap(decodeVersionJson));
+    if (versionJson.version === version) {
       continue;
     }
 
-    const packageJsonString = yield* encodePackageJson({ ...packageJson, version });
-    yield* fs.writeFileString(filePath, `${packageJsonString}\n`);
+    const versionJsonString = yield* encodeVersionJson({ ...versionJson, version });
+    yield* fs.writeFileString(filePath, `${versionJsonString}\n`);
     changed = true;
   }
 
@@ -62,10 +57,10 @@ export const updateReleasePackageVersionsCommand = Command.make(
   "update-release-package-versions",
   {
     version: Argument.string("version").pipe(
-      Argument.withDescription("Release version to write into each releasable package.json."),
+      Argument.withDescription("StudyFrame release version to write into studyframe.version.json."),
     ),
     root: Flag.string("root").pipe(
-      Flag.withDescription("Workspace root used to resolve the release package manifests."),
+      Flag.withDescription("Workspace root used to resolve studyframe.version.json."),
       Flag.optional,
     ),
     githubOutput: Flag.boolean("github-output").pipe(
@@ -80,11 +75,11 @@ export const updateReleasePackageVersionsCommand = Command.make(
       Effect.tap(({ changed }) =>
         changed
           ? Effect.void
-          : Console.log("All package.json versions already match release version."),
+          : Console.log("StudyFrame version file already matches release version."),
       ),
       Effect.tap(({ changed }) => (githubOutput ? writeGithubOutput(changed) : Effect.void)),
     ),
-).pipe(Command.withDescription("Update release package versions across the workspace."));
+).pipe(Command.withDescription("Update the StudyFrame release version file."));
 
 if (import.meta.main) {
   Command.run(updateReleasePackageVersionsCommand, { version: "0.0.0" }).pipe(

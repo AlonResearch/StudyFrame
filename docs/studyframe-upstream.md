@@ -51,6 +51,10 @@ inside a StudyFrame feature patch. Let upstream own those changes.
 The exception is an explicit StudyFrame platform decision documented in the PR or commit. Routine
 product work should not modify dependency-owned files.
 
+StudyFrame app release numbers are a separate product concern. Use the root
+`studyframe.version.json` file for StudyFrame desktop/release version bumps and keep workspace
+package manifests pinned to upstream unless a package-level divergence is deliberately documented.
+
 ## Ownership Boundary
 
 ### Upstream-Owned
