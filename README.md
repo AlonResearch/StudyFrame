@@ -4,23 +4,27 @@ StudyFrame is a desktop study workspace that turns a course folder or a list of 
 
 Students open a local course folder containing past exams, quizzes, lecture material, solutions, and supporting files. StudyFrame can also hold a local material list for inspection before extraction. It organizes extracted material into topics, gives a brief explanation of the core concepts, and guides the student through real past questions before offering generated practice.
 
-## Case Showcase: From Course Folder To Practice
+## Case Showcase: Real Questions, Turned Into A Study Loop
 
-This alpha walkthrough uses a Signal and Data Analysis course folder. StudyFrame turns the local
-material set into a study queue, keeps extracted real questions first, and gives spoiler-safe help
-while the student is still working.
+StudyFrame turns scattered course material into a focused practice system for students preparing
+from past exams, quizzes, and lecture files. In this Signal and Data Analysis example, the app moves
+from local course import to topic prioritization, compact concept review, spoiler-safe coaching, and
+post-answer feedback without pushing students into a chat workflow.
 
-| Import course material                                                                                                                    | Check topic priority                                                                                                                                                        |
+| Bring in the course folder                                                                                                                | See what matters first                                                                                                                                                      |
 | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ![StudyFrame import course dialog with local folder and drag-and-drop material options.](docs/assets/readme/studyframe-import-course.png) | ![StudyFrame learning tracker showing topic priorities, real question counts, weighted points, confidence, and subtypes.](docs/assets/readme/studyframe-topic-priority.png) |
+| Open a local course folder or review staged materials before processing begins.                                                           | Topic priority makes the next study decision obvious, using real-question coverage, points, confidence, and due topics.                                                     |
 
-| Start with a brief refresher                                                                                                                  | Work real questions with safe guidance                                                                                                                                                    |
+| Refresh only what is needed                                                                                                                   | Practice with guidance that does not spoil                                                                                                                                                |
 | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ![StudyFrame topic view showing a compact information theory refresher before practice.](docs/assets/readme/studyframe-brief-explanation.png) | ![StudyFrame real-question workspace showing an in-progress answer and direction check feedback without revealing the final solution.](docs/assets/readme/studyframe-direction-check.png) |
+| Each topic starts with the minimum theory, formulas, and interpretation cues needed to begin solving.                                         | Direction checks coach the next move while redacting answer-bearing details until the student commits.                                                                                    |
 
-| Review after answering                                                                                                                                                     |
+| Turn attempts into targeted review                                                                                                                                         |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ![StudyFrame answer review showing feedback, worked answer, and question-specific watch-outs after the student answered.](docs/assets/readme/studyframe-answer-review.png) |
+| After an answer, StudyFrame shows the worked solution, question-specific traps, and weak areas that should return in the spaced-review queue.                              |
 
 This README is the product contract for builders. StudyFrame is under active development.
 
