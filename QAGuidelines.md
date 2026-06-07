@@ -18,11 +18,11 @@ course folder
  -> markdown exports
 ```
 
-The external golden dataset is input-only. Never edit it, its reference markdown, manifest
-expectations, topic-ranking guard rails, minimum coverage, no-leakage rules, or real-question-first
-rules to make QA pass.
+The external golden dataset audit is optional and input-only. When you run it, never edit the
+dataset, its reference markdown, manifest expectations, topic-ranking guard rails, minimum coverage,
+no-leakage rules, or real-question-first rules to make QA pass.
 
-## Golden Dataset
+## Optional Golden Dataset Audit
 
 The default golden dataset is:
 
@@ -51,7 +51,6 @@ Run the narrowest useful command while iterating:
 
 ```powershell
 bun run qa:studyframe:fast
-bun run qa:studyframe:golden
 bun run qa:studyframe:ux
 ```
 
@@ -89,7 +88,7 @@ Run this after each patch.
 
 ### `qa:studyframe:golden`
 
-Live external-dataset validation:
+Optional live external-dataset validation:
 
 1. Scan the full course folder.
 2. Apply manifest exclusions without hiding registered files.
@@ -128,7 +127,6 @@ Release-oriented composition:
 
 ```text
 fast QA
- -> golden QA
  -> browser UX QA
  -> format
  -> lint
@@ -139,7 +137,7 @@ fast QA
 
 ## Artifacts
 
-Golden runs write outside tracked source files:
+Optional golden runs write outside tracked source files:
 
 ```text
 .codex-logs/studyframe-golden/<timestamp>/
@@ -181,13 +179,13 @@ When validating or improving StudyFrame:
 
 1. Record `git status --short`.
 2. Run `bun run qa:studyframe:fast`.
-3. Run `bun run qa:studyframe:golden`.
-4. Run `bun run qa:studyframe:ux`.
-5. Read generated reports.
-6. Patch only this application repository.
-7. Rerun the narrowest failing command.
-8. After it passes, run `bun run qa:studyframe:release`.
-9. Stop after three unsuccessful correction cycles and report the repeated blocker with evidence.
+3. Run `bun run qa:studyframe:ux`.
+4. Patch only this application repository.
+5. Rerun the narrowest failing command.
+6. After it passes, run `bun run qa:studyframe:release`.
+7. Run `bun run qa:studyframe:golden` only when intentionally reviewing the full external dataset,
+   then read the generated reports.
+8. Stop after three unsuccessful correction cycles and report the repeated blocker with evidence.
 
 When a long live audit is running, check for concurrent repository changes before editing. Preserve
 unrelated user changes and read the latest completed report explicitly.

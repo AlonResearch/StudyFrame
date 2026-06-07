@@ -397,19 +397,20 @@ StudyFrame workflow gate:
 
 ```bash
 bun run qa:studyframe:fast
-bun run qa:studyframe:golden
 bun run qa:studyframe:ux
 bun run qa:studyframe:release
 ```
 
-| Command                 | Coverage                                                            |
-| ----------------------- | ------------------------------------------------------------------- |
-| `qa:studyframe:fast`    | Server StudyFrame tests, web study tests, contract typecheck        |
-| `qa:studyframe:golden`  | External dataset import and semantic audit                          |
-| `qa:studyframe:ux`      | Browser tests under `apps/web/src/components/study`                 |
-| `qa:studyframe:release` | Fast, golden, UX, format, lint, typecheck, all tests, desktop smoke |
+| Command                 | Coverage                                                     |
+| ----------------------- | ------------------------------------------------------------ |
+| `qa:studyframe:fast`    | Server StudyFrame tests, web study tests, contract typecheck |
+| `qa:studyframe:golden`  | External dataset import and semantic audit                   |
+| `qa:studyframe:ux`      | Browser tests under `apps/web/src/components/study`          |
+| `qa:studyframe:release` | Fast, UX, format, lint, typecheck, all tests, desktop smoke  |
 
-The golden audit requires:
+The golden audit is an optional diagnostic, not part of the default completion or release gate. It
+currently runs the full external dataset through provider-backed analysis and can take too long for
+routine validation. It requires:
 
 ```text
 STUDYFRAME_GOLDEN_ROOT=<external Signal and Data Analysis course folder>
@@ -536,5 +537,5 @@ For every technical change:
 5. Update shared contracts before server and client consumers.
 6. Run the narrowest relevant tests while iterating.
 7. Run the required completion gate from `AGENTS.md`.
-8. For StudyFrame workflow changes, run `bun run qa:studyframe:release` when the golden dataset is
-   available and review generated reports.
+8. For StudyFrame workflow changes, run `bun run qa:studyframe:release`; run
+   `bun run qa:studyframe:golden` only when intentionally reviewing the full external dataset.

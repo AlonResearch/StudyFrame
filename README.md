@@ -197,3 +197,9 @@ Update `groundtruth.md` in the same change whenever a technical change alters ru
 contracts, persistence, extraction, provider use, build or release pipelines, required environment
 configuration, validation commands, or known technical risks. Update this README as well when the
 student-facing product contract changes.
+
+## Known Issues / Todo
+
+- Rework qualitative StudyFrame QA. The old full-dataset golden audit is too slow and broad to run as
+  a routine release requirement; keep it optional until a smaller qualitative review flow replaces
+  it.

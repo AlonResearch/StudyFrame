@@ -30,7 +30,7 @@ Preserve these invariants:
 - Run `bun fmt`, `bun lint`, and `bun typecheck` before considering tasks complete.
 - Run `bun run test`, never `bun test`.
 - If changing native mobile code, run `bun lint:mobile`.
-- For StudyFrame workflow changes, run the narrowest relevant `qa:studyframe:*` command while iterating and `bun run qa:studyframe:release` before completion when the golden dataset is available.
+- For StudyFrame workflow changes, run the narrowest relevant `qa:studyframe:*` command while iterating and `bun run qa:studyframe:release` before completion.
 
 ## Browser Verification
 
@@ -74,5 +74,6 @@ Pull useful upstream provider, security, desktop, settings, and runtime changes 
 
 ## StudyFrame QA
 
-For validation or self-correction tasks, follow `QAGuidelines.md`. Treat the external golden dataset and
-its guard rails as input-only; fix application code instead of weakening QA expectations.
+For validation or self-correction tasks, follow `QAGuidelines.md`. If you run the optional external
+golden audit, treat that dataset and its guard rails as input-only; fix application code instead of
+weakening QA expectations.
